@@ -43,7 +43,6 @@ interface TextBox {
 const MemeGenerator: React.FC = () => {
   // --- State Management ---
   const [textBoxes, setTextBoxes] = useState<TextBox[]>([]);
-  // Store the entire template object instead of just the URL and count
   const [selectedMeme, setSelectedMeme] = useState<MemeTemplate>({
     id: "181913649",
     name: "Drake Hotline Bling",
@@ -57,17 +56,16 @@ const MemeGenerator: React.FC = () => {
 
   // AI & Generation State
   const [generatingText, setGeneratingText] = useState<boolean>(false);
-  const [pendingAITexts, setPendingAITexts] = useState<string[] | null>(null);
 
   // Dragging State
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // --- AI Logic ---
-  const fetchAICaptions = async (name: string, count: number) => {
+  const handleGenerateAI = async () => {
     setGeneratingText(true);
     try {
-      const prompt = `Write a funny, creative caption for the meme template "${name}". It requires exactly ${count} text boxes. Output ONLY the text for each box, separated by a single pipe '|' character. Provide absolutely no other conversational text, numbers, or quotes.`;
+      const prompt = `Write a funny, creative caption for the meme template "${selectedMeme.name}". It requires exactly ${selectedMeme.box_count} text boxes. Output ONLY the text for each box, separated by a single pipe '|' character. Provide absolutely no other conversational text, numbers, or quotes.`;
 
       const response = await axios.post(
         "https://groqprompt.netlify.app/api/result",
@@ -80,11 +78,18 @@ const MemeGenerator: React.FC = () => {
         const parts = rawResult
           .split("|")
           .map((s: string) => s.trim().replace(/^["']|["']$/g, ""));
-        setPendingAITexts(parts);
+
+        // Update the existing text boxes with AI text
+        setTextBoxes((prev) =>
+          prev.map((box, i) => ({
+            ...box,
+            text: parts[i] || box.text,
+          })),
+        );
       }
     } catch (err) {
       console.error("AI text generation failed:", err);
-      message.error("The AI is shy right now. Using default text.");
+      message.error("The AI is shy right now. Keeping current text.");
     } finally {
       setGeneratingText(false);
     }
@@ -107,18 +112,17 @@ const MemeGenerator: React.FC = () => {
     };
 
     fetchMemes();
-    fetchAICaptions(selectedMeme.name, selectedMeme.box_count);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // Removed fetchAICaptions from here
+  }, []);
 
   // --- Logic for selecting a new template ---
   const handleMemeSelect = async (meme: MemeTemplate) => {
     setSelectedMeme(meme);
-    setTextBoxes([]); // Reset triggers initializeTextBoxes in the render effect
+    setTextBoxes([]); // Triggers initializeTextBoxes in the Canvas Effect
     setIsLibraryOpen(false);
-    await fetchAICaptions(meme.name, meme.box_count);
+    // Removed fetchAICaptions from here - now it only resets to defaults
   };
 
-  // REFACTORED: Now accepts the MemeTemplate object directly
   const initializeTextBoxes = (
     meme: MemeTemplate,
     imgWidth: number,
@@ -153,10 +157,9 @@ const MemeGenerator: React.FC = () => {
     );
 
     setTextBoxes(newBoxes);
-    setPendingAITexts(null);
   };
 
-  // --- Rendering & Auto-Wrapping Logic ---
+  // --- Rendering & Canvas Logic ---
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
@@ -172,14 +175,13 @@ const MemeGenerator: React.FC = () => {
         canvas.height = image.height;
         ctx.drawImage(image, 0, 0);
 
-        // FIX: We only initialize if we aren't waiting for the AI to finish.
-        // This ensures pendingAITexts is actually available when we draw.
-        if (textBoxes.length === 0 && !generatingText) {
+        // This handles both the first load and template switches
+        if (textBoxes.length === 0) {
           initializeTextBoxes(
             selectedMeme,
             image.width,
             image.height,
-            pendingAITexts,
+            null, // Always default to null/placeholder on template change
           );
           return;
         }
@@ -236,7 +238,7 @@ const MemeGenerator: React.FC = () => {
         });
       });
     };
-  }, [textBoxes, selectedMeme, pendingAITexts, generatingText]);
+  }, [textBoxes, selectedMeme]);
 
   // --- Drag & Drop ---
   const getMousePos = (e: React.MouseEvent | MouseEvent) => {
@@ -326,17 +328,16 @@ const MemeGenerator: React.FC = () => {
 
               <div>
                 <Text strong>Step 2: Add & Move Text</Text>
-                {/* NEW: Re-roll button placed on its own line with specific margin */}
                 <div style={{ marginTop: 8, marginBottom: 12 }}>
                   <Button
                     type="primary"
                     ghost
                     icon={<SmileOutlined />}
-                    onClick={() => handleMemeSelect(selectedMeme)} // Re-triggers AI for current meme
+                    onClick={handleGenerateAI} // Triggers only on click
                     loading={generatingText}
                     block
                   >
-                    Re-roll Captions
+                    AI Magic: Generate Captions
                   </Button>
                 </div>
 
@@ -432,50 +433,42 @@ const MemeGenerator: React.FC = () => {
         width={850}
         centered
       >
-        <Spin
-          spinning={generatingText}
-          tip="Brainstorming funny AI captions..."
-          size="large"
-        >
-          {loadingMemes ? (
-            <div
-              style={{
-                height: "60vh",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Spin size="large" />
-            </div>
-          ) : (
-            <div style={{ height: "60vh", overflowY: "auto" }}>
-              <Row gutter={[16, 16]}>
-                {memes.map((meme) => (
-                  <Col xs={12} sm={8} key={meme.id}>
-                    <Card
-                      hoverable
-                      cover={
-                        <img
-                          alt={meme.name}
-                          src={meme.url}
-                          style={{ height: 120, objectFit: "cover" }}
-                        />
-                      }
-                      onClick={() => handleMemeSelect(meme)}
-                    >
-                      <Card.Meta
-                        title={
-                          <span style={{ fontSize: 12 }}>{meme.name}</span>
-                        }
+        {loadingMemes ? (
+          <div
+            style={{
+              height: "60vh",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Spin size="large" />
+          </div>
+        ) : (
+          <div style={{ height: "60vh", overflowY: "auto" }}>
+            <Row gutter={[16, 16]}>
+              {memes.map((meme) => (
+                <Col xs={12} sm={8} key={meme.id}>
+                  <Card
+                    hoverable
+                    cover={
+                      <img
+                        alt={meme.name}
+                        src={meme.url}
+                        style={{ height: 120, objectFit: "cover" }}
                       />
-                    </Card>
-                  </Col>
-                ))}
-              </Row>
-            </div>
-          )}
-        </Spin>
+                    }
+                    onClick={() => handleMemeSelect(meme)}
+                  >
+                    <Card.Meta
+                      title={<span style={{ fontSize: 12 }}>{meme.name}</span>}
+                    />
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          </div>
+        )}
       </Modal>
     </div>
   );
