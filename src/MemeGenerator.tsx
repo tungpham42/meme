@@ -65,7 +65,7 @@ const MemeGenerator: React.FC = () => {
   const handleGenerateAI = async () => {
     setGeneratingText(true);
     try {
-      const prompt = `Write a funny, creative caption for the meme template "${selectedMeme.name}". It requires exactly ${selectedMeme.box_count} text boxes. Output ONLY the text for each box, separated by a single pipe '|' character. Provide absolutely no other conversational text, numbers, or quotes.`;
+      const prompt = `Write a funny, creative caption for the meme template "${selectedMeme.name}". It requires exactly ${selectedMeme.box_count} text boxes. Output ONLY the text for each box, separated by a single pipe '|' character.`;
 
       const response = await axios.post(
         "https://groqprompt.netlify.app/api/result",
