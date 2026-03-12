@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import {
   Card,
@@ -287,7 +287,7 @@ const MemeGenerator: React.FC = () => {
     link.click();
   };
 
-  const handleCopyImage = () => {
+  const handleCopyImage = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     canvas.toBlob(async (blob) => {
@@ -300,7 +300,36 @@ const MemeGenerator: React.FC = () => {
         message.error("Failed to copy image.");
       }
     }, "image/png");
-  };
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Detect Ctrl+C or Cmd+C
+      const isCopyShortcut =
+        (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c";
+
+      if (isCopyShortcut) {
+        // Check if the user is currently focused on an input or textarea
+        const activeElement = document.activeElement;
+        const isTyping =
+          activeElement?.tagName === "INPUT" ||
+          activeElement?.tagName === "TEXTAREA";
+
+        // Only trigger the image copy if they aren't typing text
+        if (!isTyping) {
+          e.preventDefault(); // Prevent default browser copy behavior
+          handleCopyImage();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    // Clean up the event listener on unmount
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [handleCopyImage]);
 
   return (
     <div style={{ textAlign: "center", padding: "20px" }}>
