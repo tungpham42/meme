@@ -16,13 +16,14 @@ import {
 } from "antd";
 import {
   SmileOutlined,
-  EditOutlined,
   CloudDownloadOutlined,
   PictureOutlined,
   CoffeeOutlined,
 } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
+
+const { TextArea } = Input;
 
 interface MemeTemplate {
   id: string;
@@ -74,7 +75,6 @@ const MemeGenerator: React.FC = () => {
     image.src = imageSrc;
 
     image.onload = async () => {
-      // Ensure the font is loaded before drawing
       await document.fonts.load("bold 10px Anton");
 
       canvas.width = image.width;
@@ -82,31 +82,35 @@ const MemeGenerator: React.FC = () => {
       ctx.drawImage(image, 0, 0);
 
       const fontSize = Math.floor(canvas.height / 12);
+      const lineHeight = fontSize * 1.1; // Add a small gap between lines
 
-      // Use Anton for Vietnamese support
       ctx.font = `bold ${fontSize}px Anton`;
       ctx.fillStyle = "white";
       ctx.strokeStyle = "black";
       ctx.lineWidth = fontSize / 15;
       ctx.textAlign = "center";
+
+      // --- Draw Top Text ---
       ctx.textBaseline = "top";
+      const topLines = topText.toUpperCase().split("\n"); // Split by newline
+      topLines.forEach((line, index) => {
+        const y = 20 + index * lineHeight; // Offset each line downwards
+        ctx.strokeText(line, canvas.width / 2, y);
+        ctx.fillText(line, canvas.width / 2, y);
+      });
 
-      // Draw Top Text
-      ctx.strokeText(topText.toUpperCase(), canvas.width / 2, 20);
-      ctx.fillText(topText.toUpperCase(), canvas.width / 2, 20);
-
-      // Draw Bottom Text
+      // --- Draw Bottom Text ---
       ctx.textBaseline = "bottom";
-      ctx.strokeText(
-        bottomText.toUpperCase(),
-        canvas.width / 2,
-        canvas.height - 20,
-      );
-      ctx.fillText(
-        bottomText.toUpperCase(),
-        canvas.width / 2,
-        canvas.height - 20,
-      );
+      const bottomLines = bottomText.toUpperCase().split("\n");
+      // We reverse the logic to draw from the bottom up
+      bottomLines
+        .slice()
+        .reverse()
+        .forEach((line, index) => {
+          const y = canvas.height - 20 - index * lineHeight; // Offset each line upwards
+          ctx.strokeText(line, canvas.width / 2, y);
+          ctx.fillText(line, canvas.width / 2, y);
+        });
     };
   }, [topText, bottomText, imageSrc]);
 
@@ -154,18 +158,18 @@ const MemeGenerator: React.FC = () => {
 
               <div>
                 <Text strong>Step 2: Add the funny stuff</Text>
-                <Input
+                <TextArea
                   style={{ marginTop: 8 }}
-                  prefix={<EditOutlined style={{ color: "#bfbfbf" }} />}
                   placeholder="Top text (something witty...)"
                   value={topText}
+                  autoSize={{ minRows: 1, maxRows: 3 }} // Allows growth
                   onChange={(e) => setTopText(e.target.value)}
                 />
-                <Input
+                <TextArea
                   style={{ marginTop: 12 }}
-                  prefix={<EditOutlined style={{ color: "#bfbfbf" }} />}
                   placeholder="Bottom text (the punchline...)"
                   value={bottomText}
+                  autoSize={{ minRows: 1, maxRows: 3 }}
                   onChange={(e) => setBottomText(e.target.value)}
                 />
               </div>
