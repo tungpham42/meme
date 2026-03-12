@@ -14,7 +14,7 @@ const App: React.FC = () => {
           colorPrimary: "#ff7a45",
           borderRadius: 16,
           colorBgContainer: "#ffffff",
-          fontFamily: "'Fredoka', 'Comic Neue', cursive",
+          fontFamily: "'Gluten', 'Comic Neue', cursive",
         },
       }}
     >
