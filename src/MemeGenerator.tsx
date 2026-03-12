@@ -32,87 +32,131 @@ interface MemeTemplate {
   box_count: number;
 }
 
-// 1. Define the structure for a draggable text box
 interface TextBox {
   text: string;
   x: number;
   y: number;
-  width: number; // For collision detection
+  width: number;
   height: number;
 }
 
 const MemeGenerator: React.FC = () => {
+  // --- State Management ---
   const [textBoxes, setTextBoxes] = useState<TextBox[]>([]);
-  const [imageSrc, setImageSrc] = useState<string>(
-    "https://i.imgflip.com/1otk96.jpg",
-  );
-  // Track the required number of boxes for the current template
-  const [currentBoxCount, setCurrentBoxCount] = useState<number>(2);
+  // Store the entire template object instead of just the URL and count
+  const [selectedMeme, setSelectedMeme] = useState<MemeTemplate>({
+    id: "181913649",
+    name: "Drake Hotline Bling",
+    url: "https://i.imgflip.com/1otk96.jpg",
+    box_count: 2,
+  });
+
   const [memes, setMemes] = useState<MemeTemplate[]>([]);
   const [isLibraryOpen, setIsLibraryOpen] = useState<boolean>(false);
   const [loadingMemes, setLoadingMemes] = useState<boolean>(false);
-  const [, setError] = useState<string | null>(null);
+
+  // AI & Generation State
+  const [generatingText, setGeneratingText] = useState<boolean>(false);
+  const [pendingAITexts, setPendingAITexts] = useState<string[] | null>(null);
 
   // Dragging State
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const fetchMemes = async () => {
-    setLoadingMemes(true);
-    setError(null);
+  // --- AI Logic ---
+  const fetchAICaptions = async (name: string, count: number) => {
+    setGeneratingText(true);
     try {
-      const response = await axios.get("https://api.imgflip.com/get_memes");
-      if (response.data.success) {
-        setMemes(response.data.data.memes);
+      const prompt = `Write a funny, creative caption for the meme template "${name}". It requires exactly ${count} text boxes. Output ONLY the text for each box, separated by a single pipe '|' character. Provide absolutely no other conversational text, numbers, or quotes.`;
+
+      const response = await axios.post(
+        "https://groqprompt.netlify.app/api/result",
+        { prompt },
+      );
+
+      const rawResult = response.data?.result ?? response.data;
+
+      if (typeof rawResult === "string" && rawResult.trim().length > 0) {
+        const parts = rawResult
+          .split("|")
+          .map((s: string) => s.trim().replace(/^["']|["']$/g, ""));
+        setPendingAITexts(parts);
       }
     } catch (err) {
-      setError("The interwebs are grumpy. Try again?");
-      console.error("Error fetching memes:", err);
+      console.error("AI text generation failed:", err);
+      message.error("The AI is shy right now. Using default text.");
     } finally {
-      setLoadingMemes(false);
+      setGeneratingText(false);
     }
   };
 
+  // --- Initial Load ---
   useEffect(() => {
-    fetchMemes();
-  }, []);
+    const fetchMemes = async () => {
+      setLoadingMemes(true);
+      try {
+        const response = await axios.get("https://api.imgflip.com/get_memes");
+        if (response.data.success) {
+          setMemes(response.data.data.memes);
+        }
+      } catch (err) {
+        console.error("Error fetching memes:", err);
+      } finally {
+        setLoadingMemes(false);
+      }
+    };
 
-  // 2. Initialize text boxes with default positions when image changes
+    fetchMemes();
+    fetchAICaptions(selectedMeme.name, selectedMeme.box_count);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- Logic for selecting a new template ---
+  const handleMemeSelect = async (meme: MemeTemplate) => {
+    setSelectedMeme(meme);
+    setTextBoxes([]); // Reset triggers initializeTextBoxes in the render effect
+    setIsLibraryOpen(false);
+    await fetchAICaptions(meme.name, meme.box_count);
+  };
+
+  // REFACTORED: Now accepts the MemeTemplate object directly
   const initializeTextBoxes = (
-    count: number,
+    meme: MemeTemplate,
     imgWidth: number,
     imgHeight: number,
+    aiTexts: string[] | null,
   ) => {
     const fontSize = Math.floor(imgHeight / 12);
-    const newBoxes: TextBox[] = [];
-    for (let i = 0; i < count; i++) {
-      let y = imgHeight / 2; // Default middle
-      if (i === 0) y = 50; // Top
-      if (i === count - 1 && count > 1) y = imgHeight - 50; // Bottom
+    const newBoxes: TextBox[] = Array.from(
+      { length: meme.box_count },
+      (_, i) => {
+        let y = imgHeight / 2;
+        if (i === 0) y = 50;
+        if (i === meme.box_count - 1 && meme.box_count > 1) y = imgHeight - 50;
 
-      newBoxes.push({
-        text:
+        const defaultText =
           i === 0
             ? "TOP TEXT"
-            : i === count - 1
+            : i === meme.box_count - 1
               ? "BOTTOM TEXT"
-              : `TEXT ${i + 1}`,
-        x: imgWidth / 2,
-        y: y,
-        width: 0,
-        height: fontSize,
-      });
-    }
+              : `TEXT ${i + 1}`;
+
+        const textToUse = aiTexts?.[i] || defaultText;
+
+        return {
+          text: textToUse,
+          x: imgWidth / 2,
+          y: y,
+          width: 0,
+          height: fontSize,
+        };
+      },
+    );
+
     setTextBoxes(newBoxes);
+    setPendingAITexts(null);
   };
 
-  const handleTextChange = (index: number, value: string) => {
-    const newBoxes = [...textBoxes];
-    newBoxes[index].text = value;
-    setTextBoxes(newBoxes);
-  };
-
-  // 3. Canvas Rendering Logic
+  // --- Rendering & Auto-Wrapping Logic ---
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
@@ -120,18 +164,23 @@ const MemeGenerator: React.FC = () => {
 
     const image = new Image();
     image.crossOrigin = "anonymous";
-    image.src = imageSrc;
+    image.src = selectedMeme.url;
 
     image.onload = () => {
-      // Ensure the custom font is fully loaded before drawing to the canvas
       document.fonts.load("bold 10px Anton").then(() => {
         canvas.width = image.width;
         canvas.height = image.height;
         ctx.drawImage(image, 0, 0);
 
-        // Initialize dynamically based on the current template's box_count
-        if (textBoxes.length === 0) {
-          initializeTextBoxes(currentBoxCount, image.width, image.height);
+        // FIX: We only initialize if we aren't waiting for the AI to finish.
+        // This ensures pendingAITexts is actually available when we draw.
+        if (textBoxes.length === 0 && !generatingText) {
+          initializeTextBoxes(
+            selectedMeme,
+            image.width,
+            image.height,
+            pendingAITexts,
+          );
           return;
         }
 
@@ -143,27 +192,53 @@ const MemeGenerator: React.FC = () => {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
 
+        const maxWidth = canvas.width * 0.9;
+
         textBoxes.forEach((box) => {
           const upperText = box.text.toUpperCase();
-          const lines = upperText.split("\n");
-          const lineHeight = fontSize * 1.1;
+          const manualLines = upperText.split("\n");
+          const finalLines: string[] = [];
 
-          lines.forEach((line, lIdx) => {
-            const yPos = box.y + (lIdx - (lines.length - 1) / 2) * lineHeight;
-            ctx.strokeText(line, box.x, yPos);
-            ctx.fillText(line, box.x, yPos);
+          manualLines.forEach((mLine) => {
+            const words = mLine.split(" ");
+            let currentLine = "";
+
+            words.forEach((word) => {
+              const testLine = currentLine ? `${currentLine} ${word}` : word;
+              const testWidth = ctx.measureText(testLine).width;
+
+              if (testWidth > maxWidth && currentLine !== "") {
+                finalLines.push(currentLine);
+                currentLine = word;
+              } else {
+                currentLine = testLine;
+              }
+            });
+            finalLines.push(currentLine);
           });
 
-          // Update box width and height for hit detection
-          const metrics = ctx.measureText(upperText);
-          box.width = metrics.width;
-          box.height = fontSize * lines.length;
+          const lineHeight = fontSize * 1.1;
+          let maxLineWidth = 0;
+
+          finalLines.forEach((line, lIdx) => {
+            const yOffset = (lIdx - (finalLines.length - 1) / 2) * lineHeight;
+            const yPos = box.y + yOffset;
+
+            ctx.strokeText(line, box.x, yPos);
+            ctx.fillText(line, box.x, yPos);
+
+            const lineWidth = ctx.measureText(line).width;
+            if (lineWidth > maxLineWidth) maxLineWidth = lineWidth;
+          });
+
+          box.width = maxLineWidth;
+          box.height = fontSize * finalLines.length;
         });
       });
     };
-  }, [textBoxes, imageSrc, currentBoxCount]);
+  }, [textBoxes, selectedMeme, pendingAITexts, generatingText]);
 
-  // 4. Drag & Drop Event Handlers
+  // --- Drag & Drop ---
   const getMousePos = (e: React.MouseEvent | MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -178,7 +253,6 @@ const MemeGenerator: React.FC = () => {
 
   const handleMouseDown = (e: React.MouseEvent) => {
     const { x, y } = getMousePos(e);
-    // Check if we clicked on any text box (reverse to hit top-most first)
     const hitIndex = [...textBoxes].reverse().findIndex((box) => {
       return (
         x >= box.x - box.width / 2 &&
@@ -187,10 +261,7 @@ const MemeGenerator: React.FC = () => {
         y <= box.y + box.height / 2
       );
     });
-
-    if (hitIndex !== -1) {
-      setDragIndex(textBoxes.length - 1 - hitIndex);
-    }
+    if (hitIndex !== -1) setDragIndex(textBoxes.length - 1 - hitIndex);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -204,7 +275,7 @@ const MemeGenerator: React.FC = () => {
 
   const handleMouseUp = () => setDragIndex(null);
 
-  // 5. Export Handlers
+  // --- Export ---
   const handleDownload = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -217,21 +288,16 @@ const MemeGenerator: React.FC = () => {
   const handleCopyImage = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
-    try {
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          message.error("Could not generate image blob.");
-          return;
-        }
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      try {
         const item = new ClipboardItem({ "image/png": blob });
         await navigator.clipboard.write([item]);
         message.success("Meme copied to clipboard! 📋");
-      }, "image/png");
-    } catch (err) {
-      console.error("Failed to copy image: ", err);
-      message.error("Failed to copy image. Check browser permissions.");
-    }
+      } catch (err) {
+        message.error("Failed to copy image.");
+      }
+    }, "image/png");
   };
 
   return (
@@ -275,7 +341,11 @@ const MemeGenerator: React.FC = () => {
                       placeholder={`Text box ${index + 1}...`}
                       value={box.text}
                       autoSize={{ minRows: 1, maxRows: 3 }}
-                      onChange={(e) => handleTextChange(index, e.target.value)}
+                      onChange={(e) => {
+                        const newBoxes = [...textBoxes];
+                        newBoxes[index].text = e.target.value;
+                        setTextBoxes(newBoxes);
+                      }}
                     />
                   ))}
                 </div>
@@ -287,7 +357,7 @@ const MemeGenerator: React.FC = () => {
                   icon={<CloudDownloadOutlined />}
                   size="large"
                   onClick={handleDownload}
-                  style={{ flex: 1, height: 50, fontSize: 16 }}
+                  style={{ flex: 1, height: 50 }}
                 >
                   Download
                 </Button>
@@ -295,7 +365,7 @@ const MemeGenerator: React.FC = () => {
                   icon={<CopyOutlined />}
                   size="large"
                   onClick={handleCopyImage}
-                  style={{ flex: 1, height: 50, fontSize: 16 }}
+                  style={{ flex: 1, height: 50 }}
                 >
                   Copy Image
                 </Button>
@@ -348,40 +418,50 @@ const MemeGenerator: React.FC = () => {
         width={850}
         centered
       >
-        {loadingMemes ? (
-          <Spin size="large" />
-        ) : (
-          <div style={{ height: "60vh", overflowY: "auto" }}>
-            <Row gutter={[16, 16]}>
-              {memes.map((meme) => (
-                <Col xs={12} sm={8} key={meme.id}>
-                  <Card
-                    hoverable
-                    cover={
-                      <img
-                        alt={meme.name}
-                        src={meme.url}
-                        style={{ height: 120, objectFit: "cover" }}
+        <Spin
+          spinning={generatingText}
+          tip="Brainstorming funny AI captions..."
+          size="large"
+        >
+          {loadingMemes ? (
+            <div
+              style={{
+                height: "60vh",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Spin size="large" />
+            </div>
+          ) : (
+            <div style={{ height: "60vh", overflowY: "auto" }}>
+              <Row gutter={[16, 16]}>
+                {memes.map((meme) => (
+                  <Col xs={12} sm={8} key={meme.id}>
+                    <Card
+                      hoverable
+                      cover={
+                        <img
+                          alt={meme.name}
+                          src={meme.url}
+                          style={{ height: 120, objectFit: "cover" }}
+                        />
+                      }
+                      onClick={() => handleMemeSelect(meme)}
+                    >
+                      <Card.Meta
+                        title={
+                          <span style={{ fontSize: 12 }}>{meme.name}</span>
+                        }
                       />
-                    }
-                    onClick={() => {
-                      setImageSrc(meme.url);
-                      // Update state with the template's required box count
-                      setCurrentBoxCount(meme.box_count);
-                      // Clear existing boxes to trigger re-initialization
-                      setTextBoxes([]);
-                      setIsLibraryOpen(false);
-                    }}
-                  >
-                    <Card.Meta
-                      title={<span style={{ fontSize: 12 }}>{meme.name}</span>}
-                    />
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          </div>
-        )}
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            </div>
+          )}
+        </Spin>
       </Modal>
     </div>
   );
