@@ -44,9 +44,9 @@ const MemeGenerator: React.FC = () => {
   // --- State Management ---
   const [textBoxes, setTextBoxes] = useState<TextBox[]>([]);
   const [selectedMeme, setSelectedMeme] = useState<MemeTemplate>({
-    id: "181913649",
-    name: "Drake Hotline Bling",
-    url: "https://i.imgflip.com/30b1gx.jpg",
+    id: "102156234",
+    name: "Mocking Spongebob",
+    url: "https://i.imgflip.com/1otk96.jpg",
     box_count: 2,
   });
 
