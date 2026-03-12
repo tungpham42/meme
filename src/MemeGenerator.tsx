@@ -117,8 +117,15 @@ const MemeGenerator: React.FC = () => {
   const handleDownload = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    // Formats date as YYYYMMDD and time as HHmmss
+    const now = new Date();
+    const date = now.toISOString().split("T")[0].replace(/-/g, "");
+    const time = now.toTimeString().split(" ")[0].replace(/:/g, "");
+    const timestamp = `${date}_${time}`;
+
     const link = document.createElement("a");
-    link.download = "masterpiece.png";
+    link.download = `masterpiece_${timestamp}.png`;
     link.href = canvas.toDataURL();
     link.click();
   };
