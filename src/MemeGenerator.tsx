@@ -303,7 +303,7 @@ const MemeGenerator: React.FC = () => {
   return (
     <div style={{ textAlign: "center", padding: "20px" }}>
       <Title level={1} style={{ marginBottom: "2.5rem", color: "#434343" }}>
-        Meme Studio <CoffeeOutlined />
+        Cozy Studio <CoffeeOutlined />
       </Title>
 
       <Row gutter={[32, 32]} align="top">
@@ -326,7 +326,21 @@ const MemeGenerator: React.FC = () => {
 
               <div>
                 <Text strong>Step 2: Add & Move Text</Text>
-                <div style={{ marginTop: 8, textAlign: "left" }}>
+                {/* NEW: Re-roll button placed on its own line with specific margin */}
+                <div style={{ marginTop: 8, marginBottom: 12 }}>
+                  <Button
+                    type="primary"
+                    ghost
+                    icon={<SmileOutlined />}
+                    onClick={() => handleMemeSelect(selectedMeme)} // Re-triggers AI for current meme
+                    loading={generatingText}
+                    block
+                  >
+                    Re-roll Captions
+                  </Button>
+                </div>
+
+                <div style={{ textAlign: "left" }}>
                   <Alert
                     message="Pro Tip: You can drag the text directly on the image!"
                     type="info"
