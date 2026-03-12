@@ -46,7 +46,7 @@ const MemeGenerator: React.FC = () => {
   const [selectedMeme, setSelectedMeme] = useState<MemeTemplate>({
     id: "181913649",
     name: "Drake Hotline Bling",
-    url: "https://i.imgflip.com/1otk96.jpg",
+    url: "https://i.imgflip.com/30b1gx.jpg",
     box_count: 2,
   });
 
