@@ -239,7 +239,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     image.src = selectedMeme.url;
 
     image.onload = () => {
-      document.fonts.load("bold 10px Anton").then(() => {
+      document.fonts.load("10px Anton").then(() => {
         canvas.width = image.width;
         canvas.height = image.height;
         ctx.drawImage(image, 0, 0);
@@ -250,7 +250,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
         }
 
         const fontSize = Math.floor(canvas.height / 12);
-        ctx.font = `bold ${fontSize}px Anton, sans-serif`;
+        ctx.font = `${fontSize}px Anton, sans-serif`;
         ctx.fillStyle = "white";
         ctx.strokeStyle = "black";
         ctx.lineWidth = fontSize / 15;
