@@ -25,6 +25,7 @@ import {
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
+// --- Types ---
 interface MemeTemplate {
   id: string;
   name: string;
@@ -40,7 +41,55 @@ interface TextBox {
   height: number;
 }
 
-const MemeGenerator: React.FC = () => {
+interface MemeGeneratorProps {
+  lang: "en" | "vi";
+}
+
+// --- Translations ---
+const i18n = {
+  en: {
+    tagline: "Cozy Studio",
+    station: "🎨 Crafting Station",
+    step1: "Step 1: Choose your vibe",
+    browse: "Browse Meme Library",
+    step2: "Step 2: Add & Move Text",
+    aiMagic: "AI Magic: Generate Captions",
+    proTip: "Pro Tip: You can drag the text directly on the image!",
+    download: "Download",
+    copy: "Copy Image",
+    dragHint: "Drag text boxes to position them:",
+    topText: "TOP TEXT",
+    bottomText: "BOTTOM TEXT",
+    textLabel: "Text box",
+    libraryTitle: "Template Library",
+    errorAI: "The AI is shy right now. Keeping current text.",
+    copySuccess: "Meme copied to clipboard! 📋",
+    copyError: "Failed to copy image.",
+  },
+  vi: {
+    tagline: "Xưởng Sáng Tạo",
+    station: "🎨 Trạm Sáng Tạo",
+    step1: "Bước 1: Chọn phong cách",
+    browse: "Khám phá Thư viện Meme",
+    step2: "Bước 2: Chỉnh sửa văn bản",
+    aiMagic: "Phép thuật AI: Tạo phụ đề",
+    proTip: "Mẹo: Bạn có thể kéo chữ trực tiếp trên hình ảnh!",
+    download: "Tải về",
+    copy: "Sao chép hình",
+    dragHint: "Kéo các ô chữ để thay đổi vị trí:",
+    topText: "CHỮ PHÍA TRÊN",
+    bottomText: "CHỮ PHÍA DƯỚI",
+    textLabel: "Ô chữ số",
+    libraryTitle: "Thư viện Meme",
+    errorAI: "AI đang bận một chút. Vui lòng giữ văn bản hiện tại.",
+    copySuccess: "Đã sao chép Meme vào bộ nhớ tạm! 📋",
+    copyError: "Không thể sao chép hình ảnh.",
+  },
+};
+
+const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
+  const t = i18n[lang];
+
   // --- State Management ---
   const [textBoxes, setTextBoxes] = useState<TextBox[]>([]);
   const [selectedMeme, setSelectedMeme] = useState<MemeTemplate>({
@@ -53,19 +102,53 @@ const MemeGenerator: React.FC = () => {
   const [memes, setMemes] = useState<MemeTemplate[]>([]);
   const [isLibraryOpen, setIsLibraryOpen] = useState<boolean>(false);
   const [loadingMemes, setLoadingMemes] = useState<boolean>(false);
-
-  // AI & Generation State
   const [generatingText, setGeneratingText] = useState<boolean>(false);
-
-  // Dragging State
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // --- AI Logic ---
+  useEffect(() => {
+    setTextBoxes((prev) =>
+      prev.map((box, i) => {
+        // Xác định ngôn ngữ trước đó để kiểm tra xem text hiện tại có phải là mặc định không
+        const prevLang = lang === "en" ? "vi" : "en";
+        const prevT = i18n[prevLang];
+
+        // Tạo chuỗi mặc định của ngôn ngữ cũ để so sánh
+        const oldDefault =
+          i === 0
+            ? prevT.topText
+            : i === prev.length - 1 && prev.length > 1
+              ? prevT.bottomText
+              : `${prevLang === "en" ? "TEXT" : "CHỮ"} ${i + 1}`;
+
+        // Nếu văn bản hiện tại trùng với mặc định cũ, hãy cập nhật sang mặc định mới
+        if (box.text === oldDefault) {
+          const newDefault =
+            i === 0
+              ? t.topText
+              : i === prev.length - 1 && prev.length > 1
+                ? t.bottomText
+                : `${lang === "en" ? "TEXT" : "CHỮ"} ${i + 1}`;
+
+          return { ...box, text: newDefault };
+        }
+
+        // Nếu người dùng đã tự nhập nội dung khác, giữ nguyên nội dung đó
+        return box;
+      }),
+    );
+  }, [lang, t.topText, t.bottomText]);
+
+  // --- AI Logic (Bilingual Prompt) ---
   const handleGenerateAI = async () => {
     setGeneratingText(true);
     try {
-      const prompt = `Write a funny, creative caption for the meme template "${selectedMeme.name}". It requires exactly ${selectedMeme.box_count} text boxes. Output ONLY the text for each box, separated by a single pipe '|' character.`;
+      // Prompt được dịch sang ngôn ngữ tương ứng để AI phản hồi chính xác hơn
+      const prompt =
+        lang === "en"
+          ? `Write a short, funny, creative caption for the meme template "${selectedMeme.name}" in English. It requires exactly ${selectedMeme.box_count} text boxes. Output ONLY the text for each box, separated by a single pipe '|' character.`
+          : `Viết một câu phụ đề ngắn gọn, hài hước, sáng tạo cho mẫu meme "${selectedMeme.name}" bằng tiếng Việt. Yêu cầu đúng ${selectedMeme.box_count} ô văn bản. CHỈ xuất ra văn bản cho mỗi ô, cách nhau bởi dấu gạch đứng '|'.`;
 
       const response = await axios.post(
         "https://groqprompt.netlify.app/api/result",
@@ -79,7 +162,6 @@ const MemeGenerator: React.FC = () => {
           .split("|")
           .map((s: string) => s.trim().replace(/^["']|["']$/g, ""));
 
-        // Update the existing text boxes with AI text
         setTextBoxes((prev) =>
           prev.map((box, i) => ({
             ...box,
@@ -89,7 +171,7 @@ const MemeGenerator: React.FC = () => {
       }
     } catch (err) {
       console.error("AI text generation failed:", err);
-      message.error("The AI is shy right now. Keeping current text.");
+      message.error(t.errorAI);
     } finally {
       setGeneratingText(false);
     }
@@ -110,54 +192,48 @@ const MemeGenerator: React.FC = () => {
         setLoadingMemes(false);
       }
     };
-
     fetchMemes();
-    // Removed fetchAICaptions from here
   }, []);
 
   // --- Logic for selecting a new template ---
-  const handleMemeSelect = async (meme: MemeTemplate) => {
+  const handleMemeSelect = (meme: MemeTemplate) => {
     setSelectedMeme(meme);
-    setTextBoxes([]); // Triggers initializeTextBoxes in the Canvas Effect
+    setTextBoxes([]); // Reset to trigger re-initialization
     setIsLibraryOpen(false);
-    // Removed fetchAICaptions from here - now it only resets to defaults
   };
 
-  const initializeTextBoxes = (
-    meme: MemeTemplate,
-    imgWidth: number,
-    imgHeight: number,
-    aiTexts: string[] | null,
-  ) => {
-    const fontSize = Math.floor(imgHeight / 12);
-    const newBoxes: TextBox[] = Array.from(
-      { length: meme.box_count },
-      (_, i) => {
-        let y = imgHeight / 2;
-        if (i === 0) y = 50;
-        if (i === meme.box_count - 1 && meme.box_count > 1) y = imgHeight - 50;
+  const initializeTextBoxes = useCallback(
+    (meme: MemeTemplate, imgWidth: number, imgHeight: number) => {
+      const fontSize = Math.floor(imgHeight / 12);
+      const newBoxes: TextBox[] = Array.from(
+        { length: meme.box_count },
+        (_, i) => {
+          let y = imgHeight / 2;
+          if (i === 0) y = 50;
+          if (i === meme.box_count - 1 && meme.box_count > 1)
+            y = imgHeight - 50;
 
-        const defaultText =
-          i === 0
-            ? "TOP TEXT"
-            : i === meme.box_count - 1
-              ? "BOTTOM TEXT"
-              : `TEXT ${i + 1}`;
+          // Sử dụng ngôn ngữ hiện tại để khởi tạo
+          const defaultText =
+            i === 0
+              ? t.topText
+              : i === meme.box_count - 1
+                ? t.bottomText
+                : `${lang === "en" ? "TEXT" : "CHỮ"} ${i + 1}`;
 
-        const textToUse = aiTexts?.[i] || defaultText;
-
-        return {
-          text: textToUse,
-          x: imgWidth / 2,
-          y: y,
-          width: 0,
-          height: fontSize,
-        };
-      },
-    );
-
-    setTextBoxes(newBoxes);
-  };
+          return {
+            text: defaultText,
+            x: imgWidth / 2,
+            y: y,
+            width: 0,
+            height: fontSize,
+          };
+        },
+      );
+      setTextBoxes(newBoxes);
+    },
+    [t.topText, t.bottomText, lang],
+  );
 
   // --- Rendering & Canvas Logic ---
   useEffect(() => {
@@ -170,19 +246,14 @@ const MemeGenerator: React.FC = () => {
     image.src = selectedMeme.url;
 
     image.onload = () => {
+      // Ensure canvas fonts load correctly for Vietnamese
       document.fonts.load("bold 10px Anton").then(() => {
         canvas.width = image.width;
         canvas.height = image.height;
         ctx.drawImage(image, 0, 0);
 
-        // This handles both the first load and template switches
         if (textBoxes.length === 0) {
-          initializeTextBoxes(
-            selectedMeme,
-            image.width,
-            image.height,
-            null, // Always default to null/placeholder on template change
-          );
+          initializeTextBoxes(selectedMeme, image.width, image.height);
           return;
         }
 
@@ -238,7 +309,7 @@ const MemeGenerator: React.FC = () => {
         });
       });
     };
-  }, [textBoxes, selectedMeme]);
+  }, [textBoxes, selectedMeme, initializeTextBoxes]);
 
   // --- Drag & Drop ---
   const getMousePos = (e: React.MouseEvent | MouseEvent) => {
@@ -295,54 +366,25 @@ const MemeGenerator: React.FC = () => {
       try {
         const item = new ClipboardItem({ "image/png": blob });
         await navigator.clipboard.write([item]);
-        message.success("Meme copied to clipboard! 📋");
+        message.success(t.copySuccess);
       } catch (err) {
-        message.error("Failed to copy image.");
+        message.error(t.copyError);
       }
     }, "image/png");
-  }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Detect Ctrl+C or Cmd+C
-      const isCopyShortcut =
-        (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c";
-
-      if (isCopyShortcut) {
-        // Check if the user is currently focused on an input or textarea
-        const activeElement = document.activeElement;
-        const isTyping =
-          activeElement?.tagName === "INPUT" ||
-          activeElement?.tagName === "TEXTAREA";
-
-        // Only trigger the image copy if they aren't typing text
-        if (!isTyping) {
-          e.preventDefault(); // Prevent default browser copy behavior
-          handleCopyImage();
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    // Clean up the event listener on unmount
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [handleCopyImage]);
+  }, [t.copySuccess, t.copyError]);
 
   return (
     <div style={{ textAlign: "center", padding: "20px" }}>
       <Title level={1} style={{ marginBottom: "2.5rem", color: "#434343" }}>
-        Cozy Studio <CoffeeOutlined />
+        {t.tagline} <CoffeeOutlined />
       </Title>
 
       <Row gutter={[32, 32]} align="top">
         <Col xs={24} lg={10}>
-          <Card className="cozy-card" title="🎨 Crafting Station">
+          <Card className="cozy-card" title={t.station}>
             <Space direction="vertical" size="large" style={{ width: "100%" }}>
               <div>
-                <Text strong>Step 1: Choose your vibe</Text>
+                <Text strong>{t.step1}</Text>
                 <Button
                   block
                   type="dashed"
@@ -351,28 +393,28 @@ const MemeGenerator: React.FC = () => {
                   onClick={() => setIsLibraryOpen(true)}
                   style={{ marginTop: 8 }}
                 >
-                  Browse Meme Library
+                  {t.browse}
                 </Button>
               </div>
 
               <div>
-                <Text strong>Step 2: Add & Move Text</Text>
+                <Text strong>{t.step2}</Text>
                 <div style={{ marginTop: 8, marginBottom: 12 }}>
                   <Button
                     type="primary"
                     ghost
                     icon={<SmileOutlined />}
-                    onClick={handleGenerateAI} // Triggers only on click
+                    onClick={handleGenerateAI}
                     loading={generatingText}
                     block
                   >
-                    AI Magic: Generate Captions
+                    {t.aiMagic}
                   </Button>
                 </div>
 
                 <div style={{ textAlign: "left" }}>
                   <Alert
-                    message="Pro Tip: You can drag the text directly on the image!"
+                    message={t.proTip}
                     type="info"
                     showIcon
                     icon={<DragOutlined />}
@@ -382,7 +424,7 @@ const MemeGenerator: React.FC = () => {
                     <TextArea
                       key={index}
                       style={{ marginBottom: 12 }}
-                      placeholder={`Text box ${index + 1}...`}
+                      placeholder={`${t.textLabel} ${index + 1}...`}
                       value={box.text}
                       autoSize={{ minRows: 1, maxRows: 3 }}
                       onChange={(e) => {
@@ -403,7 +445,7 @@ const MemeGenerator: React.FC = () => {
                   onClick={handleDownload}
                   style={{ flex: 1, height: 50 }}
                 >
-                  Download
+                  {t.download}
                 </Button>
                 <Button
                   icon={<CopyOutlined />}
@@ -411,7 +453,7 @@ const MemeGenerator: React.FC = () => {
                   onClick={handleCopyImage}
                   style={{ flex: 1, height: 50 }}
                 >
-                  Copy Image
+                  {t.copy}
                 </Button>
               </div>
             </Space>
@@ -424,7 +466,7 @@ const MemeGenerator: React.FC = () => {
               type="secondary"
               style={{ display: "block", marginBottom: 10 }}
             >
-              <SmileOutlined /> Drag text boxes to position them:
+              <SmileOutlined /> {t.dragHint}
             </Text>
             <div
               style={{
@@ -455,7 +497,7 @@ const MemeGenerator: React.FC = () => {
       </Row>
 
       <Modal
-        title="Template Library"
+        title={t.libraryTitle}
         open={isLibraryOpen}
         onCancel={() => setIsLibraryOpen(false)}
         footer={null}
