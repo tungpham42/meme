@@ -376,16 +376,37 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
   const handleCopyImage = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      try {
-        const item = new ClipboardItem({ "image/png": blob });
-        await navigator.clipboard.write([item]);
-        message.success(t.copySuccess);
-      } catch (err) {
-        message.error(t.copyError);
-      }
-    }, "image/png");
+
+    try {
+      // 1. Create a Promise that resolves with the canvas Blob
+      const blobPromise = new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error("Failed to create image blob"));
+          }
+        }, "image/png");
+      });
+
+      // 2. Pass the Promise directly to the ClipboardItem
+      const item = new ClipboardItem({ "image/png": blobPromise });
+
+      // 3. Call clipboard.write immediately (synchronously in the event handler)
+      navigator.clipboard
+        .write([item])
+        .then(() => {
+          message.success(t.copySuccess);
+        })
+        .catch((err) => {
+          console.error("Clipboard write error:", err);
+          message.error(t.copyError);
+        });
+    } catch (err) {
+      // Fallback for browsers that don't support passing Promises to ClipboardItem
+      console.error("ClipboardItem creation error:", err);
+      message.error(t.copyError);
+    }
   }, [t.copySuccess, t.copyError]);
 
   useEffect(() => {
