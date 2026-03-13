@@ -45,7 +45,7 @@ const App: React.FC = () => {
               level={2}
               style={{ color: "#ff7a45", margin: 0, fontWeight: 900 }}
             >
-              ✨ {lang === "en" ? "Meme Hub" : "Tạo Meme"} ✨
+              {lang === "en" ? "Meme Hub" : "Tạo Meme"}
             </Title>
             <Radio.Group
               value={lang}
