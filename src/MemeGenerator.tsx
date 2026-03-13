@@ -334,7 +334,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
         }
       });
     };
-  }, [selectedMeme, initializeTextBoxes]); 
+  }, [selectedMeme, initializeTextBoxes, drawMeme, textBoxes.length]); 
 
   // --- Redraw on Text/Position Changes ---
   useEffect(() => {
