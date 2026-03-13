@@ -198,7 +198,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
   const initializeTextBoxes = useCallback(
     (meme: MemeTemplate, imgWidth: number, imgHeight: number) => {
       const fontSize = Math.floor(imgHeight / 12);
-      
+
       const verticalSpacing = imgHeight / (meme.box_count + 1);
 
       const newBoxes: TextBox[] = Array.from(
@@ -228,94 +228,97 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
   );
 
   // --- Core Drawing Logic ---
-  const drawMeme = useCallback((isExporting = false) => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    const image = imageRef.current;
+  const drawMeme = useCallback(
+    (isExporting = false) => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      const image = imageRef.current;
 
-    if (!canvas || !ctx || !image) return;
+      if (!canvas || !ctx || !image) return;
 
-    // Reset canvas and draw background
-    canvas.width = image.width;
-    canvas.height = image.height;
-    ctx.drawImage(image, 0, 0);
+      // Reset canvas and draw background
+      canvas.width = image.width;
+      canvas.height = image.height;
+      ctx.drawImage(image, 0, 0);
 
-    const fontSize = Math.floor(canvas.height / 12);
-    const maxWidth = canvas.width * 0.9;
+      const fontSize = Math.floor(canvas.height / 12);
+      const maxWidth = canvas.width * 0.9;
 
-    textBoxes.forEach((box) => {
-      // Setup Text Styles
-      ctx.font = `${fontSize}px Anton, sans-serif`;
-      ctx.fillStyle = "white";
-      ctx.strokeStyle = "black";
-      ctx.lineWidth = fontSize / 15;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.setLineDash([]);
+      textBoxes.forEach((box) => {
+        // Setup Text Styles
+        ctx.font = `${fontSize}px Anton, sans-serif`;
+        ctx.fillStyle = "white";
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = fontSize / 15;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.setLineDash([]);
 
-      const upperText = box.text.toUpperCase();
-      const manualLines = upperText.split("\n");
-      const finalLines: string[] = [];
+        const upperText = box.text.toUpperCase();
+        const manualLines = upperText.split("\n");
+        const finalLines: string[] = [];
 
-      // Calculate word wrapping
-      manualLines.forEach((mLine) => {
-        const words = mLine.split(" ");
-        let currentLine = "";
+        // Calculate word wrapping
+        manualLines.forEach((mLine) => {
+          const words = mLine.split(" ");
+          let currentLine = "";
 
-        words.forEach((word) => {
-          const testLine = currentLine ? `${currentLine} ${word}` : word;
-          const testWidth = ctx.measureText(testLine).width;
+          words.forEach((word) => {
+            const testLine = currentLine ? `${currentLine} ${word}` : word;
+            const testWidth = ctx.measureText(testLine).width;
 
-          if (testWidth > maxWidth && currentLine !== "") {
-            finalLines.push(currentLine);
-            currentLine = word;
-          } else {
-            currentLine = testLine;
-          }
+            if (testWidth > maxWidth && currentLine !== "") {
+              finalLines.push(currentLine);
+              currentLine = word;
+            } else {
+              currentLine = testLine;
+            }
+          });
+          finalLines.push(currentLine);
         });
-        finalLines.push(currentLine);
+
+        const lineHeight = fontSize * 1.1;
+        let maxLineWidth = 0;
+
+        // Draw text and calculate max width
+        finalLines.forEach((line, lIdx) => {
+          const yOffset = (lIdx - (finalLines.length - 1) / 2) * lineHeight;
+          const yPos = box.y + yOffset;
+          ctx.strokeText(line, box.x, yPos);
+          ctx.fillText(line, box.x, yPos);
+
+          const lineWidth = ctx.measureText(line).width;
+          if (lineWidth > maxLineWidth) maxLineWidth = lineWidth;
+        });
+
+        // Update box dimensions for hit detection
+        box.width = maxLineWidth;
+        box.height = fontSize * finalLines.length;
+
+        // --- Draw Dotted Bounding Box ONLY if we aren't exporting ---
+        if (!isExporting) {
+          const padding = 12;
+          const rectX = box.x - box.width / 2 - padding;
+          const rectY = box.y - box.height / 2 - padding;
+          const rectWidth = box.width + padding * 2;
+          const rectHeight = box.height + padding * 2;
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.setLineDash([6, 6]);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+          ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
+
+          ctx.lineDashOffset = 6;
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+          ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
+          ctx.restore();
+        }
       });
-
-      const lineHeight = fontSize * 1.1;
-      let maxLineWidth = 0;
-
-      // Draw text and calculate max width
-      finalLines.forEach((line, lIdx) => {
-        const yOffset = (lIdx - (finalLines.length - 1) / 2) * lineHeight;
-        const yPos = box.y + yOffset;
-        ctx.strokeText(line, box.x, yPos);
-        ctx.fillText(line, box.x, yPos);
-
-        const lineWidth = ctx.measureText(line).width;
-        if (lineWidth > maxLineWidth) maxLineWidth = lineWidth;
-      });
-
-      // Update box dimensions for hit detection
-      box.width = maxLineWidth;
-      box.height = fontSize * finalLines.length;
-
-      // --- Draw Dotted Bounding Box ONLY if we aren't exporting ---
-      if (!isExporting) {
-        const padding = 12;
-        const rectX = box.x - box.width / 2 - padding;
-        const rectY = box.y - box.height / 2 - padding;
-        const rectWidth = box.width + padding * 2;
-        const rectHeight = box.height + padding * 2;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.setLineDash([6, 6]);
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
-        ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
-
-        ctx.lineDashOffset = 6;
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-        ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
-        ctx.restore();
-      }
-    });
-  }, [textBoxes]);
+    },
+    [textBoxes],
+  );
 
   // --- Image Loading (Runs only when selected template changes) ---
   useEffect(() => {
@@ -326,7 +329,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     image.onload = () => {
       document.fonts.load("10px Anton").then(() => {
         imageRef.current = image; // Save the image instance
-        
+
         if (textBoxes.length === 0) {
           initializeTextBoxes(selectedMeme, image.width, image.height);
         } else {
@@ -334,12 +337,19 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
         }
       });
     };
-  }, [selectedMeme, initializeTextBoxes, drawMeme, textBoxes.length]); 
+  }, [selectedMeme, initializeTextBoxes, drawMeme, textBoxes.length]);
 
   // --- Redraw on Text/Position Changes ---
   useEffect(() => {
     if (textBoxes.length > 0) {
-      drawMeme(false);
+      // 1. Combine all text currently in the boxes
+      const allText = textBoxes.map((box) => box.text).join(" ");
+
+      // 2. Force the browser to load the needed glyphs for this specific text
+      document.fonts.load("10px Anton", allText).then(() => {
+        // 3. Draw only after the font subset is fully ready
+        drawMeme(false);
+      });
     }
   }, [textBoxes, drawMeme]);
 
