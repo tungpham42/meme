@@ -250,15 +250,18 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
         }
 
         const fontSize = Math.floor(canvas.height / 12);
-        ctx.font = `${fontSize}px Anton, sans-serif`;
-        ctx.fillStyle = "white";
-        ctx.strokeStyle = "black";
-        ctx.lineWidth = fontSize / 15;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-
+        
         const maxWidth = canvas.width * 0.9;
         textBoxes.forEach((box) => {
+          // Reset context styles for text
+          ctx.font = `${fontSize}px Anton, sans-serif`;
+          ctx.fillStyle = "white";
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = fontSize / 15;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.setLineDash([]); // Ensure text outline isn't dashed
+
           const upperText = box.text.toUpperCase();
           const manualLines = upperText.split("\n");
           const finalLines: string[] = [];
@@ -284,6 +287,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
           const lineHeight = fontSize * 1.1;
           let maxLineWidth = 0;
 
+          // Draw the text
           finalLines.forEach((line, lIdx) => {
             const yOffset = (lIdx - (finalLines.length - 1) / 2) * lineHeight;
             const yPos = box.y + yOffset;
@@ -293,8 +297,34 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
             const lineWidth = ctx.measureText(line).width;
             if (lineWidth > maxLineWidth) maxLineWidth = lineWidth;
           });
+
+          // Update box dimensions for hit detection
           box.width = maxLineWidth;
           box.height = fontSize * finalLines.length;
+
+          // --- NEW: Draw Dotted Bounding Box ---
+          const padding = 12; // Breathing room around the text
+          const rectX = box.x - box.width / 2 - padding;
+          const rectY = box.y - box.height / 2 - padding;
+          const rectWidth = box.width + padding * 2;
+          const rectHeight = box.height + padding * 2;
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.setLineDash([6, 6]); // Create the dotted pattern
+          ctx.lineWidth = 2;
+          
+          // Draw a black dashed line first
+          ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+          ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
+          
+          // Draw a white dashed line offset by the dash length 
+          // This ensures the box is visible on both dark and light memes
+          ctx.lineDashOffset = 6;
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+          ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
+          
+          ctx.restore();
         });
       });
     };
