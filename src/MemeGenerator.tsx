@@ -106,6 +106,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     setTextBoxes((prev) =>
@@ -198,13 +199,11 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     (meme: MemeTemplate, imgWidth: number, imgHeight: number) => {
       const fontSize = Math.floor(imgHeight / 12);
       
-      // Calculate even spacing based on box_count
       const verticalSpacing = imgHeight / (meme.box_count + 1);
 
       const newBoxes: TextBox[] = Array.from(
         { length: meme.box_count },
         (_, i) => {
-          // Evenly distribute the Y position
           const y = verticalSpacing * (i + 1);
 
           const defaultText =
@@ -228,107 +227,121 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     [t.topText, t.bottomText, lang],
   );
 
-  // --- Rendering & Canvas Logic ---
-  useEffect(() => {
+  // --- Core Drawing Logic ---
+  const drawMeme = useCallback((isExporting = false) => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
+    const image = imageRef.current;
 
+    if (!canvas || !ctx || !image) return;
+
+    // Reset canvas and draw background
+    canvas.width = image.width;
+    canvas.height = image.height;
+    ctx.drawImage(image, 0, 0);
+
+    const fontSize = Math.floor(canvas.height / 12);
+    const maxWidth = canvas.width * 0.9;
+
+    textBoxes.forEach((box) => {
+      // Setup Text Styles
+      ctx.font = `${fontSize}px Anton, sans-serif`;
+      ctx.fillStyle = "white";
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = fontSize / 15;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.setLineDash([]);
+
+      const upperText = box.text.toUpperCase();
+      const manualLines = upperText.split("\n");
+      const finalLines: string[] = [];
+
+      // Calculate word wrapping
+      manualLines.forEach((mLine) => {
+        const words = mLine.split(" ");
+        let currentLine = "";
+
+        words.forEach((word) => {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          const testWidth = ctx.measureText(testLine).width;
+
+          if (testWidth > maxWidth && currentLine !== "") {
+            finalLines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        });
+        finalLines.push(currentLine);
+      });
+
+      const lineHeight = fontSize * 1.1;
+      let maxLineWidth = 0;
+
+      // Draw text and calculate max width
+      finalLines.forEach((line, lIdx) => {
+        const yOffset = (lIdx - (finalLines.length - 1) / 2) * lineHeight;
+        const yPos = box.y + yOffset;
+        ctx.strokeText(line, box.x, yPos);
+        ctx.fillText(line, box.x, yPos);
+
+        const lineWidth = ctx.measureText(line).width;
+        if (lineWidth > maxLineWidth) maxLineWidth = lineWidth;
+      });
+
+      // Update box dimensions for hit detection
+      box.width = maxLineWidth;
+      box.height = fontSize * finalLines.length;
+
+      // --- Draw Dotted Bounding Box ONLY if we aren't exporting ---
+      if (!isExporting) {
+        const padding = 12;
+        const rectX = box.x - box.width / 2 - padding;
+        const rectY = box.y - box.height / 2 - padding;
+        const rectWidth = box.width + padding * 2;
+        const rectHeight = box.height + padding * 2;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.setLineDash([6, 6]);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
+
+        ctx.lineDashOffset = 6;
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
+        ctx.restore();
+      }
+    });
+  }, [textBoxes]);
+
+  // --- Image Loading (Runs only when selected template changes) ---
+  useEffect(() => {
     const image = new Image();
     image.crossOrigin = "anonymous";
     image.src = selectedMeme.url;
 
     image.onload = () => {
       document.fonts.load("10px Anton").then(() => {
-        canvas.width = image.width;
-        canvas.height = image.height;
-        ctx.drawImage(image, 0, 0);
-
+        imageRef.current = image; // Save the image instance
+        
         if (textBoxes.length === 0) {
           initializeTextBoxes(selectedMeme, image.width, image.height);
-          return;
+        } else {
+          drawMeme(false);
         }
-
-        const fontSize = Math.floor(canvas.height / 12);
-        
-        const maxWidth = canvas.width * 0.9;
-        textBoxes.forEach((box) => {
-          // Reset context styles for text
-          ctx.font = `${fontSize}px Anton, sans-serif`;
-          ctx.fillStyle = "white";
-          ctx.strokeStyle = "black";
-          ctx.lineWidth = fontSize / 15;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.setLineDash([]); // Ensure text outline isn't dashed
-
-          const upperText = box.text.toUpperCase();
-          const manualLines = upperText.split("\n");
-          const finalLines: string[] = [];
-
-          manualLines.forEach((mLine) => {
-            const words = mLine.split(" ");
-            let currentLine = "";
-
-            words.forEach((word) => {
-              const testLine = currentLine ? `${currentLine} ${word}` : word;
-              const testWidth = ctx.measureText(testLine).width;
-
-              if (testWidth > maxWidth && currentLine !== "") {
-                finalLines.push(currentLine);
-                currentLine = word;
-              } else {
-                currentLine = testLine;
-              }
-            });
-            finalLines.push(currentLine);
-          });
-
-          const lineHeight = fontSize * 1.1;
-          let maxLineWidth = 0;
-
-          // Draw the text
-          finalLines.forEach((line, lIdx) => {
-            const yOffset = (lIdx - (finalLines.length - 1) / 2) * lineHeight;
-            const yPos = box.y + yOffset;
-            ctx.strokeText(line, box.x, yPos);
-            ctx.fillText(line, box.x, yPos);
-
-            const lineWidth = ctx.measureText(line).width;
-            if (lineWidth > maxLineWidth) maxLineWidth = lineWidth;
-          });
-
-          // Update box dimensions for hit detection
-          box.width = maxLineWidth;
-          box.height = fontSize * finalLines.length;
-
-          // --- NEW: Draw Dotted Bounding Box ---
-          const padding = 12; // Breathing room around the text
-          const rectX = box.x - box.width / 2 - padding;
-          const rectY = box.y - box.height / 2 - padding;
-          const rectWidth = box.width + padding * 2;
-          const rectHeight = box.height + padding * 2;
-
-          ctx.save();
-          ctx.beginPath();
-          ctx.setLineDash([6, 6]); // Create the dotted pattern
-          ctx.lineWidth = 2;
-          
-          // Draw a black dashed line first
-          ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
-          ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
-          
-          // Draw a white dashed line offset by the dash length 
-          // This ensures the box is visible on both dark and light memes
-          ctx.lineDashOffset = 6;
-          ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-          ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
-          
-          ctx.restore();
-        });
       });
     };
-  }, [textBoxes, selectedMeme, initializeTextBoxes]);
+  }, [selectedMeme, initializeTextBoxes]); 
+
+  // --- Redraw on Text/Position Changes ---
+  useEffect(() => {
+    if (textBoxes.length > 0) {
+      drawMeme(false);
+    }
+  }, [textBoxes, drawMeme]);
 
   // --- Drag & Drop (Mouse & Touch) ---
   const getPointerPos = (clientX: number, clientY: number) => {
@@ -395,22 +408,28 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
 
   // --- Export ---
   const handleDownload = () => {
+    drawMeme(true); // Sync redraw without borders
+
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const link = document.createElement("a");
     link.download = `meme_${Date.now()}.png`;
     link.href = canvas.toDataURL();
     link.click();
+
+    drawMeme(false); // Instantly restore borders
   };
 
   const handleCopyImage = useCallback(() => {
+    drawMeme(true); // Sync redraw without borders
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     try {
-      // 1. Create a Promise that resolves with the canvas Blob
       const blobPromise = new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((blob) => {
+          drawMeme(false); // Restore borders immediately once data is captured
           if (blob) {
             resolve(blob);
           } else {
@@ -419,25 +438,20 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
         }, "image/png");
       });
 
-      // 2. Pass the Promise directly to the ClipboardItem
       const item = new ClipboardItem({ "image/png": blobPromise });
-
-      // 3. Call clipboard.write immediately (synchronously in the event handler)
       navigator.clipboard
         .write([item])
-        .then(() => {
-          message.success(t.copySuccess);
-        })
+        .then(() => message.success(t.copySuccess))
         .catch((err) => {
           console.error("Clipboard write error:", err);
           message.error(t.copyError);
         });
     } catch (err) {
-      // Fallback for browsers that don't support passing Promises to ClipboardItem
       console.error("ClipboardItem creation error:", err);
       message.error(t.copyError);
+      drawMeme(false); // Fallback restore
     }
-  }, [t.copySuccess, t.copyError]);
+  }, [t.copySuccess, t.copyError, drawMeme]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
