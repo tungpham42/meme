@@ -110,11 +110,9 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
   useEffect(() => {
     setTextBoxes((prev) =>
       prev.map((box, i) => {
-        // Xác định ngôn ngữ trước đó để kiểm tra xem text hiện tại có phải là mặc định không
         const prevLang = lang === "en" ? "vi" : "en";
         const prevT = i18n[prevLang];
 
-        // Tạo chuỗi mặc định của ngôn ngữ cũ để so sánh
         const oldDefault =
           i === 0
             ? prevT.topText
@@ -122,7 +120,6 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
               ? prevT.bottomText
               : `${prevLang === "en" ? "TEXT" : "CHỮ"} ${i + 1}`;
 
-        // Nếu văn bản hiện tại trùng với mặc định cũ, hãy cập nhật sang mặc định mới
         if (box.text === oldDefault) {
           const newDefault =
             i === 0
@@ -134,7 +131,6 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
           return { ...box, text: newDefault };
         }
 
-        // Nếu người dùng đã tự nhập nội dung khác, giữ nguyên nội dung đó
         return box;
       }),
     );
@@ -144,24 +140,20 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
   const handleGenerateAI = async () => {
     setGeneratingText(true);
     try {
-      // Prompt được dịch sang ngôn ngữ tương ứng để AI phản hồi chính xác hơn
       const prompt =
         lang === "en"
           ? `Write a short, funny, creative caption for the meme template "${selectedMeme.name}" in English. It requires exactly ${selectedMeme.box_count} text boxes. Output ONLY the text for each box, separated by a single pipe '|' character.`
           : `Viết một câu phụ đề ngắn gọn, hài hước, sáng tạo cho mẫu meme "${selectedMeme.name}" bằng tiếng Việt. Yêu cầu đúng ${selectedMeme.box_count} ô văn bản. CHỈ xuất ra văn bản cho mỗi ô, cách nhau bởi dấu gạch đứng '|'.`;
-
       const response = await axios.post(
         "https://groqprompt.netlify.app/api/result",
         { prompt },
       );
-
       const rawResult = response.data?.result ?? response.data;
 
       if (typeof rawResult === "string" && rawResult.trim().length > 0) {
         const parts = rawResult
           .split("|")
           .map((s: string) => s.trim().replace(/^["']|["']$/g, ""));
-
         setTextBoxes((prev) =>
           prev.map((box, i) => ({
             ...box,
@@ -205,15 +197,16 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
   const initializeTextBoxes = useCallback(
     (meme: MemeTemplate, imgWidth: number, imgHeight: number) => {
       const fontSize = Math.floor(imgHeight / 12);
+      
+      // Calculate even spacing based on box_count
+      const verticalSpacing = imgHeight / (meme.box_count + 1);
+
       const newBoxes: TextBox[] = Array.from(
         { length: meme.box_count },
         (_, i) => {
-          let y = imgHeight / 2;
-          if (i === 0) y = 50;
-          if (i === meme.box_count - 1 && meme.box_count > 1)
-            y = imgHeight - 50;
+          // Evenly distribute the Y position
+          const y = verticalSpacing * (i + 1);
 
-          // Sử dụng ngôn ngữ hiện tại để khởi tạo
           const defaultText =
             i === 0
               ? t.topText
@@ -246,7 +239,6 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     image.src = selectedMeme.url;
 
     image.onload = () => {
-      // Ensure canvas fonts load correctly for Vietnamese
       document.fonts.load("bold 10px Anton").then(() => {
         canvas.width = image.width;
         canvas.height = image.height;
@@ -266,7 +258,6 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
         ctx.textBaseline = "middle";
 
         const maxWidth = canvas.width * 0.9;
-
         textBoxes.forEach((box) => {
           const upperText = box.text.toUpperCase();
           const manualLines = upperText.split("\n");
@@ -296,14 +287,12 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
           finalLines.forEach((line, lIdx) => {
             const yOffset = (lIdx - (finalLines.length - 1) / 2) * lineHeight;
             const yPos = box.y + yOffset;
-
             ctx.strokeText(line, box.x, yPos);
             ctx.fillText(line, box.x, yPos);
 
             const lineWidth = ctx.measureText(line).width;
             if (lineWidth > maxLineWidth) maxLineWidth = lineWidth;
           });
-
           box.width = maxLineWidth;
           box.height = fontSize * finalLines.length;
         });
@@ -311,21 +300,20 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     };
   }, [textBoxes, selectedMeme, initializeTextBoxes]);
 
-  // --- Drag & Drop ---
-  const getMousePos = (e: React.MouseEvent | MouseEvent) => {
+  // --- Drag & Drop (Mouse & Touch) ---
+  const getPointerPos = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
     };
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    const { x, y } = getMousePos(e);
+  const checkHit = (x: number, y: number) => {
     const hitIndex = [...textBoxes].reverse().findIndex((box) => {
       return (
         x >= box.x - box.width / 2 &&
@@ -337,16 +325,43 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     if (hitIndex !== -1) setDragIndex(textBoxes.length - 1 - hitIndex);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const moveBox = (x: number, y: number) => {
     if (dragIndex === null) return;
-    const { x, y } = getMousePos(e);
     const newBoxes = [...textBoxes];
     newBoxes[dragIndex].x = x;
     newBoxes[dragIndex].y = y;
     setTextBoxes(newBoxes);
   };
 
+  // Mouse Handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const { x, y } = getPointerPos(e.clientX, e.clientY);
+    checkHit(x, y);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const { x, y } = getPointerPos(e.clientX, e.clientY);
+    moveBox(x, y);
+  };
+
   const handleMouseUp = () => setDragIndex(null);
+
+  // Touch Handlers for Mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const { x, y } = getPointerPos(touch.clientX, touch.clientY);
+    checkHit(x, y);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (dragIndex !== null) {
+      const touch = e.touches[0];
+      const { x, y } = getPointerPos(touch.clientX, touch.clientY);
+      moveBox(x, y);
+    }
+  };
+
+  const handleTouchEnd = () => setDragIndex(null);
 
   // --- Export ---
   const handleDownload = () => {
@@ -375,28 +390,23 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Detect Ctrl+C or Cmd+C
       const isCopyShortcut =
         (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c";
 
       if (isCopyShortcut) {
-        // Check if the user is currently focused on an input or textarea
         const activeElement = document.activeElement;
         const isTyping =
           activeElement?.tagName === "INPUT" ||
           activeElement?.tagName === "TEXTAREA";
 
-        // Only trigger the image copy if they aren't typing text
         if (!isTyping) {
-          e.preventDefault(); // Prevent default browser copy behavior
+          e.preventDefault();
           handleCopyImage();
         }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-
-    // Clean up the event listener on unmount
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
@@ -511,6 +521,9 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
                 style={{
                   maxWidth: "100%",
                   height: "auto",
@@ -518,6 +531,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
                   display: "block",
                   margin: "0 auto",
                   boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+                  touchAction: "none", // Critical for mobile to prevent scroll when dragging
                 }}
               />
             </div>
