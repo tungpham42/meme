@@ -373,6 +373,35 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     }, "image/png");
   }, [t.copySuccess, t.copyError]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Detect Ctrl+C or Cmd+C
+      const isCopyShortcut =
+        (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c";
+
+      if (isCopyShortcut) {
+        // Check if the user is currently focused on an input or textarea
+        const activeElement = document.activeElement;
+        const isTyping =
+          activeElement?.tagName === "INPUT" ||
+          activeElement?.tagName === "TEXTAREA";
+
+        // Only trigger the image copy if they aren't typing text
+        if (!isTyping) {
+          e.preventDefault(); // Prevent default browser copy behavior
+          handleCopyImage();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    // Clean up the event listener on unmount
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [handleCopyImage]);
+
   return (
     <div style={{ textAlign: "center", padding: "20px" }}>
       <Title level={1} style={{ marginBottom: "2.5rem", color: "#434343" }}>
