@@ -26,7 +26,7 @@ const App: React.FC = () => {
           colorPrimary: "#ff7a45",
           borderRadius: 16,
           colorBgContainer: "#ffffff",
-          fontFamily: "'Anton', 'Gluten', sans-serif",
+          fontFamily: "'Gluten', 'Comic Sans MS', cursive",
         },
       }}
     >
