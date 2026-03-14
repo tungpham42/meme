@@ -12,6 +12,7 @@ import {
   Spin,
   Alert,
   message,
+  InputNumber,
 } from "antd";
 import {
   SmileOutlined,
@@ -20,6 +21,7 @@ import {
   CoffeeOutlined,
   DragOutlined,
   CopyOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
@@ -39,6 +41,7 @@ interface TextBox {
   y: number;
   width: number;
   height: number;
+  fontSize: number; // Added to support custom sizing
 }
 
 interface MemeGeneratorProps {
@@ -62,6 +65,8 @@ const i18n = {
     bottomText: "BOTTOM TEXT",
     textLabel: "Text box",
     libraryTitle: "Template Library",
+    searchMemes: "Search templates...",
+    fontSize: "Size",
     errorAI: "The AI is shy right now. Keeping current text.",
     copySuccess: "Meme copied to clipboard! 📋",
     copyError: "Failed to copy image.",
@@ -81,6 +86,8 @@ const i18n = {
     bottomText: "CHỮ PHÍA DƯỚI",
     textLabel: "Ô chữ số",
     libraryTitle: "Thư viện Meme",
+    searchMemes: "Tìm kiếm mẫu...",
+    fontSize: "Cỡ chữ",
     errorAI: "AI đang bận một chút. Vui lòng giữ văn bản hiện tại.",
     copySuccess: "Đã sao chép Meme vào bộ nhớ tạm! 📋",
     copyError: "Không thể sao chép hình ảnh.",
@@ -104,6 +111,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
   const [loadingMemes, setLoadingMemes] = useState<boolean>(false);
   const [generatingText, setGeneratingText] = useState<boolean>(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>(""); // Search state
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -197,8 +205,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
 
   const initializeTextBoxes = useCallback(
     (meme: MemeTemplate, imgWidth: number, imgHeight: number) => {
-      const fontSize = Math.floor(imgHeight / 12);
-
+      const defaultFontSize = Math.floor(imgHeight / 12);
       const verticalSpacing = imgHeight / (meme.box_count + 1);
 
       const newBoxes: TextBox[] = Array.from(
@@ -218,7 +225,8 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
             x: imgWidth / 2,
             y: y,
             width: 0,
-            height: fontSize,
+            height: defaultFontSize,
+            fontSize: defaultFontSize, // Save initial font size
           };
         },
       );
@@ -241,10 +249,12 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
       canvas.height = image.height;
       ctx.drawImage(image, 0, 0);
 
-      const fontSize = Math.floor(canvas.height / 12);
       const maxWidth = canvas.width * 0.9;
 
       textBoxes.forEach((box) => {
+        // Read the font size directly from the current text box
+        const fontSize = box.fontSize;
+
         // Setup Text Styles
         ctx.font = `${fontSize}px Anton, sans-serif`;
         ctx.fillStyle = "white";
@@ -487,6 +497,11 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     };
   }, [handleCopyImage]);
 
+  // Derived state for filtered memes
+  const filteredMemes = memes.filter((meme) =>
+    meme.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div style={{ textAlign: "center", padding: "20px" }}>
       <Title level={1} style={{ marginBottom: "2.5rem", color: "#434343" }}>
@@ -535,18 +550,34 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
                     style={{ marginBottom: 12 }}
                   />
                   {textBoxes.map((box, index) => (
-                    <TextArea
-                      key={index}
-                      style={{ marginBottom: 12 }}
-                      placeholder={`${t.textLabel} ${index + 1}...`}
-                      value={box.text}
-                      autoSize={{ minRows: 1, maxRows: 3 }}
-                      onChange={(e) => {
-                        const newBoxes = [...textBoxes];
-                        newBoxes[index].text = e.target.value;
-                        setTextBoxes(newBoxes);
-                      }}
-                    />
+                    <div key={index} style={{ marginBottom: 12, display: "flex", gap: "8px" }}>
+                      <TextArea
+                        style={{ flex: 1 }}
+                        placeholder={`${t.textLabel} ${index + 1}...`}
+                        value={box.text}
+                        autoSize={{ minRows: 1, maxRows: 3 }}
+                        onChange={(e) => {
+                          const newBoxes = [...textBoxes];
+                          newBoxes[index].text = e.target.value;
+                          setTextBoxes(newBoxes);
+                        }}
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '70px' }}>
+                        <Text style={{ fontSize: '12px' }}>{t.fontSize}</Text>
+                        <InputNumber
+                          size="small"
+                          value={box.fontSize}
+                          onChange={(val) => {
+                            if (val !== null) {
+                              const newBoxes = [...textBoxes];
+                              newBoxes[index].fontSize = val;
+                              setTextBoxes(newBoxes);
+                            }
+                          }}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -622,6 +653,14 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
         width={850}
         centered
       >
+        <Input
+          placeholder={t.searchMemes}
+          prefix={<SearchOutlined />}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          allowClear
+          style={{ marginBottom: 16 }}
+        />
         {loadingMemes ? (
           <div
             style={{
@@ -636,7 +675,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
         ) : (
           <div style={{ height: "60vh", overflowY: "auto" }}>
             <Row gutter={[16, 16]}>
-              {memes.map((meme) => (
+              {filteredMemes.map((meme) => (
                 <Col xs={12} sm={8} key={meme.id}>
                   <Card
                     hoverable
@@ -655,6 +694,11 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
                   </Card>
                 </Col>
               ))}
+              {filteredMemes.length === 0 && (
+                <Col span={24} style={{ textAlign: "center", marginTop: 20 }}>
+                  <Text type="secondary">No templates found.</Text>
+                </Col>
+              )}
             </Row>
           </div>
         )}
