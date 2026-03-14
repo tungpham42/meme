@@ -244,7 +244,6 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
 
       if (!canvas || !ctx || !image) return;
 
-      // Reset canvas and draw background
       canvas.width = image.width;
       canvas.height = image.height;
       ctx.drawImage(image, 0, 0);
@@ -252,10 +251,9 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
       const maxWidth = canvas.width * 0.9;
 
       textBoxes.forEach((box) => {
-        // Read the font size directly from the current text box
         const fontSize = box.fontSize;
+        const lineHeight = fontSize * 1.1;
 
-        // Setup Text Styles
         ctx.font = `${fontSize}px Anton, sans-serif`;
         ctx.fillStyle = "white";
         ctx.strokeStyle = "black";
@@ -264,11 +262,12 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
         ctx.textBaseline = "middle";
         ctx.setLineDash([]);
 
-        const upperText = box.text.toUpperCase();
+        // Trim and process text to prevent alignment shifts from extra spaces
+        const upperText = box.text.trim().toUpperCase();
         const manualLines = upperText.split("\n");
         const finalLines: string[] = [];
 
-        // Calculate word wrapping
+        // 1. Calculate word wrapping and total dimensions first
         manualLines.forEach((mLine) => {
           const words = mLine.split(" ");
           let currentLine = "";
@@ -287,25 +286,28 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
           finalLines.push(currentLine);
         });
 
-        const lineHeight = fontSize * 1.1;
+        const totalHeight = lineHeight * finalLines.length;
         let maxLineWidth = 0;
-
-        // Draw text and calculate max width
-        finalLines.forEach((line, lIdx) => {
-          const yOffset = (lIdx - (finalLines.length - 1) / 2) * lineHeight;
-          const yPos = box.y + yOffset;
-          ctx.strokeText(line, box.x, yPos);
-          ctx.fillText(line, box.x, yPos);
-
-          const lineWidth = ctx.measureText(line).width;
-          if (lineWidth > maxLineWidth) maxLineWidth = lineWidth;
+        finalLines.forEach((line) => {
+          const width = ctx.measureText(line).width;
+          if (width > maxLineWidth) maxLineWidth = width;
         });
 
-        // Update box dimensions for hit detection
+        // 2. Sync box dimensions for hit detection and visual rectangles
         box.width = maxLineWidth;
-        box.height = fontSize * finalLines.length;
+        box.height = totalHeight;
 
-        // --- Draw Dotted Bounding Box ONLY if we aren't exporting ---
+        // 3. Draw the text lines centered around box.y
+        finalLines.forEach((line, lIdx) => {
+          // Centering offset: distributes lines equally above and below the center point
+          const yOffset = (lIdx - (finalLines.length - 1) / 2) * lineHeight;
+          const yPos = box.y + yOffset;
+
+          ctx.strokeText(line, box.x, yPos);
+          ctx.fillText(line, box.x, yPos);
+        });
+
+        // 4. Draw the bounding rectangle (Dotted Line)
         if (!isExporting) {
           const padding = 12;
           const rectX = box.x - box.width / 2 - padding;
@@ -499,7 +501,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
 
   // Derived state for filtered memes
   const filteredMemes = memes.filter((meme) =>
-    meme.name.toLowerCase().includes(searchQuery.toLowerCase())
+    meme.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
@@ -549,36 +551,72 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
                     icon={<DragOutlined />}
                     style={{ marginBottom: 12 }}
                   />
-                  {textBoxes.map((box, index) => (
-                    <div key={index} style={{ marginBottom: 12, display: "flex", gap: "8px" }}>
-                      <TextArea
-                        style={{ flex: 1 }}
-                        placeholder={`${t.textLabel} ${index + 1}...`}
-                        value={box.text}
-                        autoSize={{ minRows: 1, maxRows: 3 }}
-                        onChange={(e) => {
-                          const newBoxes = [...textBoxes];
-                          newBoxes[index].text = e.target.value;
-                          setTextBoxes(newBoxes);
-                        }}
-                      />
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '70px' }}>
-                        <Text style={{ fontSize: '12px' }}>{t.fontSize}</Text>
-                        <InputNumber
-                          size="small"
-                          value={box.fontSize}
-                          onChange={(val) => {
-                            if (val !== null) {
-                              const newBoxes = [...textBoxes];
-                              newBoxes[index].fontSize = val;
-                              setTextBoxes(newBoxes);
-                            }
+                  {textBoxes.map((box, index) => {
+                    // Determine the label based on the position of the text box
+                    const boxLabel =
+                      index === 0
+                        ? t.topText
+                        : index === textBoxes.length - 1 && textBoxes.length > 1
+                          ? t.bottomText
+                          : `${t.textLabel} ${index + 1}`;
+
+                    return (
+                      <div key={index} style={{ marginBottom: 16 }}>
+                        {/* Labels Row */}
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 6,
                           }}
-                          style={{ width: '100%' }}
-                        />
+                        >
+                          <Text strong>{boxLabel}</Text>
+                          <Text
+                            strong
+                            style={{
+                              fontSize: "12px",
+                              width: "70px",
+                              textAlign: "left",
+                            }}
+                          >
+                            {t.fontSize}
+                          </Text>
+                        </div>
+
+                        {/* Inputs Row */}
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "8px",
+                            alignItems: "flex-start",
+                          }}
+                        >
+                          <TextArea
+                            style={{ flex: 1 }}
+                            placeholder={`${t.textLabel} ${index + 1}...`}
+                            value={box.text}
+                            autoSize={{ minRows: 1, maxRows: 3 }}
+                            onChange={(e) => {
+                              const newBoxes = [...textBoxes];
+                              newBoxes[index].text = e.target.value;
+                              setTextBoxes(newBoxes);
+                            }}
+                          />
+                          <InputNumber
+                            value={box.fontSize}
+                            onChange={(val) => {
+                              if (val !== null) {
+                                const newBoxes = [...textBoxes];
+                                newBoxes[index].fontSize = val;
+                                setTextBoxes(newBoxes);
+                              }
+                            }}
+                            style={{ width: "70px" }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
