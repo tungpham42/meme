@@ -22,6 +22,7 @@ import {
   DragOutlined,
   CopyOutlined,
   SearchOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
@@ -59,7 +60,7 @@ const i18n = {
     aiMagic: "AI Magic: Generate Captions",
     proTip: "Pro Tip: You can drag the text directly on the image!",
     download: "Download",
-    copy: "Copy Image",
+    copy: "Copy",
     dragHint: "Drag text boxes to position them:",
     topText: "TOP TEXT",
     bottomText: "BOTTOM TEXT",
@@ -70,6 +71,7 @@ const i18n = {
     errorAI: "The AI is shy right now. Keeping current text.",
     copySuccess: "Meme copied to clipboard! 📋",
     copyError: "Failed to copy image.",
+    reset: "Reset",
   },
   vi: {
     tagline: "Xưởng Sáng Tạo",
@@ -80,7 +82,7 @@ const i18n = {
     aiMagic: "Phép thuật AI: Tạo phụ đề",
     proTip: "Mẹo: Bạn có thể kéo chữ trực tiếp trên hình ảnh!",
     download: "Tải về",
-    copy: "Sao chép hình",
+    copy: "Sao chép",
     dragHint: "Kéo các ô chữ để thay đổi vị trí:",
     topText: "CHỮ PHÍA TRÊN",
     bottomText: "CHỮ PHÍA DƯỚI",
@@ -91,6 +93,7 @@ const i18n = {
     errorAI: "AI đang bận một chút. Vui lòng giữ văn bản hiện tại.",
     copySuccess: "Đã sao chép Meme vào bộ nhớ tạm! 📋",
     copyError: "Không thể sao chép hình ảnh.",
+    reset: "Đặt lại",
   },
 };
 
@@ -504,6 +507,14 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     meme.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
+  const handleReset = () => {
+    const image = imageRef.current;
+    if (image) {
+      // Gọi lại hàm initialize để đưa các box về vị trí mặc định dựa trên kích thước ảnh
+      initializeTextBoxes(selectedMeme, image.width, image.height);
+    }
+  };
+
   return (
     <div style={{ textAlign: "center", padding: "20px" }}>
       <Title level={1} style={{ marginBottom: "2.5rem", color: "#434343" }}>
@@ -529,7 +540,23 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
               </div>
 
               <div>
-                <Text strong>{t.step2}</Text>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text strong>{t.step2}</Text>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<ReloadOutlined style={{ fontSize: "12px" }} />}
+                    onClick={handleReset}
+                    style={{ color: "#8c8c8c", padding: 0 }}
+                  ></Button>
+                </div>
+
                 <div style={{ marginTop: 8, marginBottom: 12 }}>
                   <Button
                     type="primary"
