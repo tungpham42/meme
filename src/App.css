@@ -24,7 +24,13 @@ h2,
   background: #ffffffaa !important;
   backdrop-filter: blur(10px);
   border-bottom: 2px solid #ffd8bf;
-  z-index: 10;
+  
+  /* --- NEW STICKY PROPERTIES --- */
+  position: sticky;
+  top: 0;
+  width: 100%;
+  z-index: 1000; /* Increased to ensure it floats above the main content and canvas */
+  
   height: 70px !important;
 }
 
