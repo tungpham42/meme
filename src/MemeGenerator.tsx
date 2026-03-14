@@ -719,6 +719,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
         centered
       >
         <Input
+          autoFocus
           placeholder={t.searchMemes}
           prefix={<SearchOutlined />}
           value={searchQuery}
