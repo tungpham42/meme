@@ -42,7 +42,8 @@ interface TextBox {
   y: number;
   width: number;
   height: number;
-  fontSize: number; // Added to support custom sizing
+  fontSize: number;
+  rotation: number;
 }
 
 interface MemeGeneratorProps {
@@ -58,16 +59,17 @@ const i18n = {
     browse: "Browse Meme Library",
     step2: "Step 2: Add & Move Text",
     aiMagic: "AI Magic: Generate Captions",
-    proTip: "Pro Tip: You can drag the text directly on the image!",
+    proTip: "Pro Tip: You can drag or rotate the text directly on the image!",
     download: "Download",
     copy: "Copy",
-    dragHint: "Drag text boxes to position them:",
+    dragHint: "Drag text boxes or use the top handle to rotate:",
     topText: "TOP TEXT",
     bottomText: "BOTTOM TEXT",
     textLabel: "Text box",
     libraryTitle: "Template Library",
     searchMemes: "Search templates...",
     fontSize: "Size",
+    rotation: "Rotate",
     errorAI: "The AI is shy right now. Keeping current text.",
     copySuccess: "Meme copied to clipboard! 📋",
     copyError: "Failed to copy image.",
@@ -80,16 +82,17 @@ const i18n = {
     browse: "Khám phá Thư viện Meme",
     step2: "Bước 2: Chỉnh sửa văn bản",
     aiMagic: "Phép thuật AI: Tạo phụ đề",
-    proTip: "Mẹo: Bạn có thể kéo chữ trực tiếp trên hình ảnh!",
+    proTip: "Mẹo: Bạn có thể kéo hoặc xoay chữ trực tiếp trên hình ảnh!",
     download: "Tải về",
     copy: "Sao chép",
-    dragHint: "Kéo các ô chữ để thay đổi vị trí:",
+    dragHint: "Kéo các ô chữ hoặc dùng điểm neo phía trên để xoay:",
     topText: "CHỮ PHÍA TRÊN",
     bottomText: "CHỮ PHÍA DƯỚI",
     textLabel: "Ô chữ số",
     libraryTitle: "Thư viện Meme",
     searchMemes: "Tìm kiếm mẫu...",
     fontSize: "Cỡ chữ",
+    rotation: "Xoay",
     errorAI: "AI đang bận một chút. Vui lòng giữ văn bản hiện tại.",
     copySuccess: "Đã sao chép Meme vào bộ nhớ tạm! 📋",
     copyError: "Không thể sao chép hình ảnh.",
@@ -113,8 +116,11 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
   const [isLibraryOpen, setIsLibraryOpen] = useState<boolean>(false);
   const [loadingMemes, setLoadingMemes] = useState<boolean>(false);
   const [generatingText, setGeneratingText] = useState<boolean>(false);
+
+  // Track dragging state and interaction mode (moving vs rotating)
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>(""); // Search state
+  const [dragMode, setDragMode] = useState<"move" | "rotate" | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -199,10 +205,9 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     fetchMemes();
   }, []);
 
-  // --- Logic for selecting a new template ---
   const handleMemeSelect = (meme: MemeTemplate) => {
     setSelectedMeme(meme);
-    setTextBoxes([]); // Reset to trigger re-initialization
+    setTextBoxes([]);
     setIsLibraryOpen(false);
   };
 
@@ -229,7 +234,8 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
             y: y,
             width: 0,
             height: defaultFontSize,
-            fontSize: defaultFontSize, // Save initial font size
+            fontSize: defaultFontSize,
+            rotation: 0,
           };
         },
       );
@@ -265,12 +271,11 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
         ctx.textBaseline = "middle";
         ctx.setLineDash([]);
 
-        // Trim and process text to prevent alignment shifts from extra spaces
         const upperText = box.text.trim().toUpperCase();
         const manualLines = upperText.split("\n");
         const finalLines: string[] = [];
 
-        // 1. Calculate word wrapping and total dimensions first
+        // 1. Calculate word wrapping and total dimensions
         manualLines.forEach((mLine) => {
           const words = mLine.split(" ");
           let currentLine = "";
@@ -296,29 +301,32 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
           if (width > maxLineWidth) maxLineWidth = width;
         });
 
-        // 2. Sync box dimensions for hit detection and visual rectangles
+        // 2. Sync box dimensions for hit detection
         box.width = maxLineWidth;
         box.height = totalHeight;
 
-        // 3. Draw the text lines centered around box.y
-        finalLines.forEach((line, lIdx) => {
-          // Centering offset: distributes lines equally above and below the center point
-          const yOffset = (lIdx - (finalLines.length - 1) / 2) * lineHeight;
-          const yPos = box.y + yOffset;
+        // 3. Transform context for rotation
+        ctx.save();
+        ctx.translate(box.x, box.y);
+        ctx.rotate((box.rotation * Math.PI) / 180);
 
-          ctx.strokeText(line, box.x, yPos);
-          ctx.fillText(line, box.x, yPos);
+        // 4. Draw the text lines centered around the new rotated origin (0, 0)
+        finalLines.forEach((line, lIdx) => {
+          const yOffset = (lIdx - (finalLines.length - 1) / 2) * lineHeight;
+
+          ctx.strokeText(line, 0, yOffset);
+          ctx.fillText(line, 0, yOffset);
         });
 
-        // 4. Draw the bounding rectangle (Dotted Line)
+        // 5. Draw the bounding rectangle and rotation handle
         if (!isExporting) {
           const padding = 12;
-          const rectX = box.x - box.width / 2 - padding;
-          const rectY = box.y - box.height / 2 - padding;
+          const rectX = -box.width / 2 - padding;
+          const rectY = -box.height / 2 - padding;
           const rectWidth = box.width + padding * 2;
           const rectHeight = box.height + padding * 2;
 
-          ctx.save();
+          // Draw dashed bounding box
           ctx.beginPath();
           ctx.setLineDash([6, 6]);
           ctx.lineWidth = 2;
@@ -328,14 +336,34 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
           ctx.lineDashOffset = 6;
           ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
           ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
-          ctx.restore();
+
+          // Draw the rotation handle
+          const handleY = rectY - 30; // 30 pixels above the bounding box
+
+          // Connective line
+          ctx.beginPath();
+          ctx.setLineDash([]);
+          ctx.moveTo(0, rectY);
+          ctx.lineTo(0, handleY);
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+          ctx.stroke();
+
+          // Circular node
+          ctx.beginPath();
+          ctx.arc(0, handleY, 6, 0, Math.PI * 2);
+          ctx.fillStyle = "#1677ff"; // Ant Design primary blue
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "white";
+          ctx.stroke();
         }
+
+        ctx.restore(); // Reset transformation for the next box
       });
     },
     [textBoxes],
   );
 
-  // --- Image Loading (Runs only when selected template changes) ---
   useEffect(() => {
     const image = new Image();
     image.crossOrigin = "anonymous";
@@ -343,7 +371,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
 
     image.onload = () => {
       document.fonts.load("10px Anton").then(() => {
-        imageRef.current = image; // Save the image instance
+        imageRef.current = image;
 
         if (textBoxes.length === 0) {
           initializeTextBoxes(selectedMeme, image.width, image.height);
@@ -354,21 +382,16 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     };
   }, [selectedMeme, initializeTextBoxes, drawMeme, textBoxes.length]);
 
-  // --- Redraw on Text/Position Changes ---
   useEffect(() => {
     if (textBoxes.length > 0) {
-      // 1. Combine all text currently in the boxes
       const allText = textBoxes.map((box) => box.text).join(" ");
-
-      // 2. Force the browser to load the needed glyphs for this specific text
       document.fonts.load("10px Anton", allText).then(() => {
-        // 3. Draw only after the font subset is fully ready
         drawMeme(false);
       });
     }
   }, [textBoxes, drawMeme]);
 
-  // --- Drag & Drop (Mouse & Touch) ---
+  // --- Drag & Drop & Rotation Handlers ---
   const getPointerPos = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -382,26 +405,74 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
   };
 
   const checkHit = (x: number, y: number) => {
-    const hitIndex = [...textBoxes].reverse().findIndex((box) => {
-      return (
-        x >= box.x - box.width / 2 &&
-        x <= box.x + box.width / 2 &&
-        y >= box.y - box.height / 2 &&
-        y <= box.y + box.height / 2
+    // Check backwards to respect stacking order (top items first)
+    for (let i = textBoxes.length - 1; i >= 0; i--) {
+      const box = textBoxes[i];
+
+      // Un-rotate the pointer coordinates relative to the box center
+      const dx = x - box.x;
+      const dy = y - box.y;
+      const rad = (-box.rotation * Math.PI) / 180;
+
+      const localX = dx * Math.cos(rad) - dy * Math.sin(rad);
+      const localY = dx * Math.sin(rad) + dy * Math.cos(rad);
+
+      // 1. Check if the rotate handle was hit
+      const padding = 12;
+      const rectY = -box.height / 2 - padding;
+      const handleY = rectY - 30; // Matches drawing logic
+
+      const distToHandle = Math.sqrt(
+        localX * localX + (localY - handleY) * (localY - handleY),
       );
-    });
-    if (hitIndex !== -1) setDragIndex(textBoxes.length - 1 - hitIndex);
+
+      // 15 is a generous hit radius to make clicking on mobile easy
+      if (distToHandle <= 15) {
+        setDragIndex(i);
+        setDragMode("rotate");
+        return;
+      }
+
+      // 2. Check if the bounding box was hit
+      if (
+        localX >= -box.width / 2 &&
+        localX <= box.width / 2 &&
+        localY >= -box.height / 2 &&
+        localY <= box.height / 2
+      ) {
+        setDragIndex(i);
+        setDragMode("move");
+        return;
+      }
+    }
+
+    // Nothing hit
+    setDragIndex(null);
+    setDragMode(null);
   };
 
-  const moveBox = (x: number, y: number) => {
-    if (dragIndex === null) return;
+  const handleDrag = (x: number, y: number) => {
+    if (dragIndex === null || dragMode === null) return;
+
     const newBoxes = [...textBoxes];
-    newBoxes[dragIndex].x = x;
-    newBoxes[dragIndex].y = y;
+    const box = newBoxes[dragIndex];
+
+    if (dragMode === "move") {
+      box.x = x;
+      box.y = y;
+    } else if (dragMode === "rotate") {
+      // Calculate angle from center of box to mouse pointer.
+      // We add 90 degrees because the handle is at the top (which is technically -90 degrees in atan2)
+      const angleInRads = Math.atan2(y - box.y, x - box.x);
+      const angleInDegrees = angleInRads * (180 / Math.PI) + 90;
+
+      // Round to nearest integer for clean UI
+      box.rotation = Math.round(angleInDegrees);
+    }
+
     setTextBoxes(newBoxes);
   };
 
-  // Mouse Handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     const { x, y } = getPointerPos(e.clientX, e.clientY);
     checkHit(x, y);
@@ -409,12 +480,14 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
 
   const handleMouseMove = (e: React.MouseEvent) => {
     const { x, y } = getPointerPos(e.clientX, e.clientY);
-    moveBox(x, y);
+    handleDrag(x, y);
   };
 
-  const handleMouseUp = () => setDragIndex(null);
+  const clearDrag = () => {
+    setDragIndex(null);
+    setDragMode(null);
+  };
 
-  // Touch Handlers for Mobile
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
     const { x, y } = getPointerPos(touch.clientX, touch.clientY);
@@ -425,15 +498,13 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     if (dragIndex !== null) {
       const touch = e.touches[0];
       const { x, y } = getPointerPos(touch.clientX, touch.clientY);
-      moveBox(x, y);
+      handleDrag(x, y);
     }
   };
 
-  const handleTouchEnd = () => setDragIndex(null);
-
   // --- Export ---
   const handleDownload = () => {
-    drawMeme(true); // Sync redraw without borders
+    drawMeme(true);
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -443,18 +514,18 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     link.href = canvas.toDataURL();
     link.click();
 
-    drawMeme(false); // Instantly restore borders
+    drawMeme(false);
   };
 
   const handleCopyImage = useCallback(() => {
-    drawMeme(true); // Sync redraw without borders
+    drawMeme(true);
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     try {
       const blobPromise = new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((blob) => {
-          drawMeme(false); // Restore borders immediately once data is captured
+          drawMeme(false);
           if (blob) {
             resolve(blob);
           } else {
@@ -474,7 +545,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     } catch (err) {
       console.error("ClipboardItem creation error:", err);
       message.error(t.copyError);
-      drawMeme(false); // Fallback restore
+      drawMeme(false);
     }
   }, [t.copySuccess, t.copyError, drawMeme]);
 
@@ -502,7 +573,6 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
     };
   }, [handleCopyImage]);
 
-  // Derived state for filtered memes
   const filteredMemes = memes.filter((meme) =>
     meme.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
@@ -510,7 +580,6 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
   const handleReset = () => {
     const image = imageRef.current;
     if (image) {
-      // Gọi lại hàm initialize để đưa các box về vị trí mặc định dựa trên kích thước ảnh
       initializeTextBoxes(selectedMeme, image.width, image.height);
     }
   };
@@ -579,7 +648,6 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
                     style={{ marginBottom: 12 }}
                   />
                   {textBoxes.map((box, index) => {
-                    // Determine the label based on the position of the text box
                     const boxLabel =
                       index === 0
                         ? t.topText
@@ -598,16 +666,28 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
                           }}
                         >
                           <Text strong>{boxLabel}</Text>
-                          <Text
-                            strong
-                            style={{
-                              fontSize: "12px",
-                              width: "70px",
-                              textAlign: "left",
-                            }}
-                          >
-                            {t.fontSize}
-                          </Text>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <Text
+                              strong
+                              style={{
+                                fontSize: "12px",
+                                width: "70px",
+                                textAlign: "left",
+                              }}
+                            >
+                              {t.fontSize}
+                            </Text>
+                            <Text
+                              strong
+                              style={{
+                                fontSize: "12px",
+                                width: "70px",
+                                textAlign: "left",
+                              }}
+                            >
+                              {t.rotation}
+                            </Text>
+                          </div>
                         </div>
 
                         {/* Inputs Row */}
@@ -635,6 +715,19 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
                               if (val !== null) {
                                 const newBoxes = [...textBoxes];
                                 newBoxes[index].fontSize = val;
+                                setTextBoxes(newBoxes);
+                              }
+                            }}
+                            style={{ width: "70px" }}
+                          />
+                          <InputNumber
+                            value={box.rotation}
+                            min={-180}
+                            max={180}
+                            onChange={(val) => {
+                              if (val !== null) {
+                                const newBoxes = [...textBoxes];
+                                newBoxes[index].rotation = val;
                                 setTextBoxes(newBoxes);
                               }
                             }}
@@ -683,18 +776,23 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
                 background: "#f0f2f5",
                 padding: "15px",
                 borderRadius: "24px",
-                cursor: dragIndex !== null ? "grabbing" : "crosshair",
+                cursor:
+                  dragMode === "rotate"
+                    ? "grabbing"
+                    : dragMode === "move"
+                      ? "move"
+                      : "crosshair",
               }}
             >
               <canvas
                 ref={canvasRef}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
+                onMouseUp={clearDrag}
+                onMouseLeave={clearDrag}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
+                onTouchEnd={clearDrag}
                 style={{
                   maxWidth: "100%",
                   height: "auto",
@@ -702,7 +800,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
                   display: "block",
                   margin: "0 auto",
                   boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
-                  touchAction: "none", // Critical for mobile to prevent scroll when dragging
+                  touchAction: "none",
                 }}
               />
             </div>
