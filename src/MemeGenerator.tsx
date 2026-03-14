@@ -553,7 +553,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
                     size="small"
                     icon={<ReloadOutlined style={{ fontSize: "12px" }} />}
                     onClick={handleReset}
-                    style={{ color: "#8c8c8c", padding: 0 }}
+                    style={{ color: "#ff8c69", padding: 0 }}
                   ></Button>
                 </div>
 
