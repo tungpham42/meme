@@ -13,6 +13,7 @@ import {
   Alert,
   message,
   InputNumber,
+  theme,
 } from "antd";
 import {
   SmileOutlined,
@@ -124,6 +125,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const { token } = theme.useToken();
 
   useEffect(() => {
     setTextBoxes((prev) =>
@@ -586,7 +588,10 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
 
   return (
     <div style={{ textAlign: "center", padding: "20px" }}>
-      <Title level={1} style={{ marginBottom: "2.5rem", color: "#434343" }}>
+      <Title
+        level={1}
+        style={{ marginBottom: "2.5rem", color: token.colorTextHeading }}
+      >
         {t.tagline} <CoffeeOutlined />
       </Title>
 
@@ -773,7 +778,7 @@ const MemeGenerator: React.FC<MemeGeneratorProps> = ({ lang }) => {
             </Text>
             <div
               style={{
-                background: "#f0f2f5",
+                background: token.colorBgLayout, // Changed from "#f0f2f5"
                 padding: "15px",
                 borderRadius: "24px",
                 cursor:

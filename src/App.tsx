@@ -1,5 +1,14 @@
-import React, { useState } from "react";
-import { Layout, Typography, ConfigProvider, Radio } from "antd";
+import React, { useState, useEffect } from "react";
+import {
+  Layout,
+  Typography,
+  ConfigProvider,
+  Radio,
+  Button,
+  theme as antTheme,
+  Space,
+} from "antd";
+import { SunOutlined, MoonOutlined } from "@ant-design/icons";
 import MemeGenerator from "./MemeGenerator";
 import "./App.css";
 
@@ -7,30 +16,52 @@ const { Header, Content, Footer } = Layout;
 const { Title } = Typography;
 
 const App: React.FC = () => {
-  // Khởi tạo state từ localStorage, mặc định là "en" nếu chưa có dữ liệu
+  // Language State
   const [lang, setLang] = useState<"en" | "vi">((): "en" | "vi" => {
     const savedLang = localStorage.getItem("meme_lang");
     return savedLang === "vi" || savedLang === "en" ? savedLang : "en";
   });
 
-  // Cập nhật localStorage mỗi khi ngôn ngữ thay đổi
+  // Theme State
+  const [themeMode, setThemeMode] = useState<"light" | "dark">(
+    (): "light" | "dark" => {
+      const savedTheme = localStorage.getItem("meme_theme");
+      return savedTheme === "dark" ? "dark" : "light";
+    },
+  );
+
   const handleLangChange = (newLang: "en" | "vi") => {
     setLang(newLang);
     localStorage.setItem("meme_lang", newLang);
   };
 
+  const toggleTheme = () => {
+    const newTheme = themeMode === "light" ? "dark" : "light";
+    setThemeMode(newTheme);
+    localStorage.setItem("meme_theme", newTheme);
+  };
+
+  // Sync a class to the body for broader CSS scoping if needed
+  useEffect(() => {
+    document.body.className = themeMode;
+  }, [themeMode]);
+
   return (
     <ConfigProvider
       theme={{
+        algorithm:
+          themeMode === "dark"
+            ? antTheme.darkAlgorithm
+            : antTheme.defaultAlgorithm,
         token: {
           colorPrimary: "#ff7a45",
           borderRadius: 16,
-          colorBgContainer: "#ffffff",
           fontFamily: "'Gluten', 'Comic Sans MS', cursive",
         },
       }}
     >
-      <Layout className="app-layout">
+      {/* Pass the themeMode to the layout for custom CSS targeting */}
+      <Layout className={`app-layout ${themeMode}`}>
         <Header className="app-header">
           <div
             className="header-content"
@@ -47,20 +78,34 @@ const App: React.FC = () => {
             >
               {lang === "en" ? "Meme Hub" : "Tạo Meme"}
             </Title>
-            <Radio.Group
-              value={lang}
-              onChange={(e) => handleLangChange(e.target.value)}
-              buttonStyle="solid"
-            >
-              <Radio.Button value="en">EN</Radio.Button>
-              <Radio.Button value="vi">VI</Radio.Button>
-            </Radio.Group>
+
+            <Space size="middle">
+              {/* 2. Update the icon prop to use SunOutlined for light and MoonOutlined for dark */}
+              <Button
+                type="text"
+                icon={
+                  themeMode === "light" ? <MoonOutlined /> : <SunOutlined />
+                }
+                onClick={toggleTheme}
+                style={{
+                  fontSize: "20px",
+                  color: themeMode === "dark" ? "#ffd8bf" : "#ff7a45",
+                }}
+              />
+              <Radio.Group
+                value={lang}
+                onChange={(e) => handleLangChange(e.target.value)}
+                buttonStyle="solid"
+              >
+                <Radio.Button value="en">EN</Radio.Button>
+                <Radio.Button value="vi">VI</Radio.Button>
+              </Radio.Group>
+            </Space>
           </div>
         </Header>
 
         <Content className="app-content">
           <div className="container">
-            {/* Truyền lang xuống MemeGenerator để xử lý prompt AI và UI */}
             <MemeGenerator lang={lang} />
           </div>
         </Content>
