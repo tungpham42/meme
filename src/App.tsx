@@ -93,6 +93,7 @@ const App: React.FC = () => {
                 }}
               />
               <Radio.Group
+                style={{ display: "flex" }}
                 value={lang}
                 onChange={(e) => handleLangChange(e.target.value)}
                 buttonStyle="solid"
