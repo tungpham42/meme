@@ -22,13 +22,36 @@ const App: React.FC = () => {
     return savedLang === "vi" || savedLang === "en" ? savedLang : "en";
   });
 
-  // Theme State
-  const [themeMode, setThemeMode] = useState<"light" | "dark">(
-    (): "light" | "dark" => {
-      const savedTheme = localStorage.getItem("meme_theme");
-      return savedTheme === "dark" ? "dark" : "light";
-    },
-  );
+  // Theme State: Initialize from localStorage OR System Preference
+  const [themeMode, setThemeMode] = useState<"light" | "dark">(() => {
+    const savedTheme = localStorage.getItem("meme_theme");
+    if (savedTheme === "dark" || savedTheme === "light") {
+      return savedTheme;
+    }
+    // Fallback to system preference if no explicit choice was saved
+    return window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  });
+
+  // System Theme Listener: React to OS/Browser changes in real-time
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+    const handleChange = (e: MediaQueryListEvent) => {
+      // Only auto-switch the theme if the user hasn't explicitly saved a preference
+      if (!localStorage.getItem("meme_theme")) {
+        setThemeMode(e.matches ? "dark" : "light");
+      }
+    };
+
+    // Add event listener for modern browsers
+    mediaQuery.addEventListener("change", handleChange);
+
+    // Cleanup listener on unmount
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
 
   const handleLangChange = (newLang: "en" | "vi") => {
     setLang(newLang);
@@ -38,10 +61,11 @@ const App: React.FC = () => {
   const toggleTheme = () => {
     const newTheme = themeMode === "light" ? "dark" : "light";
     setThemeMode(newTheme);
+    // Explicit user toggles override system preferences
     localStorage.setItem("meme_theme", newTheme);
   };
 
-  // Sync a class to the body for broader CSS scoping if needed
+  // Sync a class to the body for broader CSS scoping
   useEffect(() => {
     document.body.className = themeMode;
   }, [themeMode]);
@@ -80,7 +104,6 @@ const App: React.FC = () => {
             </Title>
 
             <Space size="middle">
-              {/* 2. Update the icon prop to use SunOutlined for light and MoonOutlined for dark */}
               <Button
                 type="text"
                 icon={
